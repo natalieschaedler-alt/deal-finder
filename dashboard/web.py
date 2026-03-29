@@ -452,6 +452,26 @@ def _load_shopping_plan(csv_path: str = "shopping_plan.csv") -> pd.DataFrame:
         return pd.DataFrame()
 
 
+@st.cache_data(show_spinner=False)
+def _load_data_cached(csv_path: str) -> pd.DataFrame:
+    return _load_data(csv_path)
+
+
+@st.cache_data(show_spinner=False)
+def _load_actions_cached(actions_path: str) -> pd.DataFrame:
+    return _load_actions_dataframe(actions_path)
+
+
+@st.cache_data(show_spinner=False)
+def _load_shopping_plan_cached(csv_path: str = "shopping_plan.csv") -> pd.DataFrame:
+    return _load_shopping_plan(csv_path)
+
+
+@st.cache_data(show_spinner=False)
+def _load_snapshots_cached(limit: int = 300) -> list[dict]:
+    return load_snapshots(limit=limit)
+
+
 def _safe_float_series(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(dtype=float)
@@ -957,10 +977,11 @@ def _render_setup_guide(config: ConfigManager) -> None:
         <div class="checklist-card">
             <ol>
                 <li>Im Tab <strong>Produkte</strong> Zielprodukte hinterlegen oder anpassen.</li>
-                <li>Oben auf <strong>Deals jetzt aktualisieren</strong> klicken.</li>
-                <li>Im Tab <strong>Uebersicht</strong> die beste Einkaufsliste pruefen.</li>
-                <li>Im Tab <strong>Deals</strong> nur die besten Treffer oeffnen und Aktionen speichern.</li>
-                <li>Im Tab <strong>Aktivitaeten</strong> nachverfolgen, was gekauft, beobachtet oder ignoriert wurde.</li>
+                <li>Oben auf <strong>Jetzt scannen</strong> klicken.</li>
+                <li>Im Tab <strong>Übersicht / Dashboard</strong> den Top-Deal prüfen.</li>
+                <li>Im Tab <strong>Deals Feed</strong> filtern und Entscheidungen speichern.</li>
+                <li>Im Tab <strong>Marktanalyse</strong> Trends und echte Verkäufe prüfen.</li>
+                <li>Im Tab <strong>Einstellungen / API / Hilfe</strong> Produkte und API-Zugang verwalten.</li>
             </ol>
         </div>
         """,
@@ -976,7 +997,7 @@ def _render_setup_guide(config: ConfigManager) -> None:
 
 
 def _render_data_quality_panel() -> None:
-    rows = load_snapshots(limit=300)
+    rows = _load_snapshots_cached(limit=300)
     summary = summarize_snapshots(rows)
 
     st.markdown("### Datenqualitaet")
@@ -1050,27 +1071,31 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
     if control_cols[0].button("Jetzt scannen", use_container_width=True, type="primary"):
         with st.spinner("Suche laeuft, Deals werden neu berechnet..."):
             result = run_search_workflow(show_console=False, enable_notifications=False, export_files=True)
+        st.cache_data.clear()
         st.session_state["last_run_summary"] = (
             f"{len(result['deals'])} Deals, {len(result['selected_deals'])} Budget-Käufe, "
             f"Budgetverbrauch {result['budget_plan']['total_spend']:.2f} EUR"
         )
         st.rerun()
     if control_cols[1].button("Daten neu laden", use_container_width=True):
+        st.cache_data.clear()
         st.rerun()
     if control_cols[2].button("Top-Deals fokussieren", use_container_width=True):
         st.session_state["only_recommended"] = True
         st.rerun()
 
-    deals = _ensure_deal_ids(_load_data(csv_path))
-    actions_df = _load_actions_dataframe(actions_path)
-    shopping_plan = _load_shopping_plan()
+    deals = _ensure_deal_ids(_load_data_cached(csv_path))
+    actions_df = _load_actions_cached(actions_path)
+    shopping_plan = _load_shopping_plan_cached()
     current_products = ProductManager().products
+
+    st.caption("Drücke 'Jetzt scannen', um neue Deals mit potenziellem Gewinn zu finden. Danach entscheide in Sekunden: kaufbar, beobachten oder Risiko.")
 
     if not deals.empty and "Datenbasis" in deals.columns:
         real_ratio = float((deals["Datenbasis"] == "Echt").mean() * 100)
         if real_ratio < 50:
             st.warning(
-                "Viele Deals basieren noch auf Fallback-Daten. Fuer echte Marktdaten bitte ebay_app_id setzen."
+                "Viele Deals nutzen aktuell Demo-Daten. Fuer maximale Genauigkeit eBay Live-Marktdaten aktivieren."
             )
 
     _render_alert_banner(deals)
@@ -1085,7 +1110,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
         st.markdown("### Wichtig")
         st.markdown("Echte Live-Daten werden am besten mit eBay API-Key.")
 
-    tabs = st.tabs(["Dashboard", "Deals", "Produkte", "Aktivitaeten", "Setup & Hilfe"])
+    tabs = st.tabs(["Übersicht / Dashboard", "Deals Feed", "Marktanalyse", "Einstellungen / API / Hilfe"])
 
     with tabs[0]:
         _render_top_strip(deals, current_products)
@@ -1108,11 +1133,6 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 st.markdown("- Risiko")
                 st.markdown("- Geschwindigkeit direkt sichtbar")
 
-        _render_market_analysis(deals, current_products)
-        _render_arbitrage_panel(deals)
-        _render_data_quality_panel()
-        _render_system_status(config, len(current_products), deals)
-
     with tabs[1]:
         if deals.empty:
             st.info("Noch keine Deals vorhanden.")
@@ -1127,6 +1147,12 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 max_price = st.number_input("Preisbereich", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
                 platform_options = ["Alle", "eBay", "Kleinanzeigen", "Facebook", "Vinted", "Willhaben", "Shpock", "Marketplace"]
                 selected_platform = st.selectbox("Plattform", options=platform_options)
+                conditions = sorted([value for value in deals.get("Zustand", pd.Series(dtype=str)).dropna().unique().tolist()])
+                selected_condition = st.selectbox("Zustand", options=["Alle"] + conditions)
+                has_distance = "Entfernung_km" in deals.columns
+                max_distance = st.slider("Entfernung (km)", min_value=0, max_value=500, value=250, step=10, disabled=not has_distance)
+                if not has_distance:
+                    st.caption("Entfernung wird aktiv, sobald Distanzdaten verfügbar sind.")
                 only_buy = st.checkbox("Nur kaufbar", value=True)
                 only_recommended = st.checkbox("Nur Top-Angebote", value=st.session_state.get("only_recommended", False))
                 st.session_state["only_recommended"] = only_recommended
@@ -1136,6 +1162,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             filtered["Einkauf"] = _safe_float_series(filtered, "Einkauf")
             filtered["Chance_Score"] = _safe_float_series(filtered, "Chance_Score")
             filtered["Plattform"] = filtered.get("Link", pd.Series(dtype=str)).apply(_platform_from_link)
+            filtered["Zustand"] = filtered.get("Zustand", pd.Series(dtype=str)).fillna("-")
             filtered = filtered[filtered["Netto-Gewinn"] >= min_netto]
             filtered = filtered[filtered["Einkauf"] <= max_price]
             if only_buy and "Aktion" in filtered.columns:
@@ -1146,6 +1173,10 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 filtered = filtered[filtered["Produkt"] == selected_product]
             if selected_platform != "Alle":
                 filtered = filtered[filtered["Plattform"] == selected_platform]
+            if selected_condition != "Alle" and "Zustand" in filtered.columns:
+                filtered = filtered[filtered["Zustand"] == selected_condition]
+            if has_distance and "Entfernung_km" in filtered.columns:
+                filtered = filtered[_safe_float_series(filtered, "Entfernung_km") <= float(max_distance)]
 
             with layout_cols[1]:
                 _render_deal_cards(filtered)
@@ -1197,7 +1228,29 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                     st.dataframe(history, use_container_width=True, hide_index=True)
 
     with tabs[2]:
-        st.markdown("### Aktuelle Produkte")
+        _render_market_analysis(deals, current_products)
+        _render_arbitrage_panel(deals)
+        snapshots = _load_snapshots_cached(limit=120)
+        st.markdown("### Echte Verkäufe geprüft")
+        if not snapshots:
+            st.info("Noch keine Markthistorie vorhanden.")
+        else:
+            runs_df = pd.DataFrame(
+                [
+                    {
+                        "Zeit": row.get("timestamp", ""),
+                        "Produkt": row.get("product", ""),
+                        "Angebote": row.get("offers_count", 0),
+                        "Verkäufe": row.get("market_metrics", {}).get("sold_history_count", 0),
+                    }
+                    for row in snapshots
+                ]
+            )
+            st.dataframe(runs_df.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
+
+    with tabs[3]:
+        _render_setup_guide(config)
+        st.markdown("### Produkte")
         product_frame = pd.DataFrame([
             {
                 "Name": product.name,
@@ -1211,40 +1264,14 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             for product in current_products
         ])
         st.dataframe(product_frame, use_container_width=True, hide_index=True)
-        st.markdown("### Neues Produkt hinzufügen")
         _save_new_product()
 
-    with tabs[3]:
         st.markdown("### Gespeicherte Aktionen")
         if actions_df.empty:
             st.info("Noch keine Aktionen gespeichert.")
         else:
             st.dataframe(actions_df.sort_values(by="timestamp", ascending=False), use_container_width=True, hide_index=True)
-        st.markdown("### Live-Daten Verlauf")
-        snapshots = load_snapshots(limit=120)
-        if not snapshots:
-            st.info("Noch kein Live-Verlauf vorhanden.")
-        else:
-            runs_df = pd.DataFrame(
-                [
-                    {
-                        "Zeit": row.get("timestamp", ""),
-                        "Produkt": row.get("product", ""),
-                        "Angebote": row.get("offers_count", 0),
-                        "Sold-History": row.get("market_metrics", {}).get("sold_history_count", 0),
-                    }
-                    for row in snapshots
-                ]
-            )
-            st.dataframe(runs_df.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
-        st.markdown("### App ausprobieren")
-        st.markdown("1. Klicke oben auf 'Deals jetzt aktualisieren'.")
-        st.markdown("2. Wechsle in den Tab 'Deals'.")
-        st.markdown("3. Wähle einen Deal und speichere eine Aktion.")
-        st.markdown("4. Prüfe danach den Tab 'Aktivitaeten' oder die Einkaufsliste in 'Uebersicht'.")
 
-    with tabs[4]:
-        _render_setup_guide(config)
         st.markdown("### Empfohlene Betriebsmodi")
         modes = pd.DataFrame(
             [
@@ -1274,6 +1301,12 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
         st.markdown("2. eBay API-Key fuer echte Live-Daten")
         st.markdown("3. Regelmaessiger Suchlauf und gepflegter Aktivitaetsverlauf")
         st.markdown("4. Einfache Kaufregeln statt zu strenger Filter")
+
+        with st.expander("Systemstatus anzeigen", expanded=False):
+            _render_system_status(config, len(current_products), deals)
+
+        with st.expander("Technische Datenqualität anzeigen", expanded=False):
+            _render_data_quality_panel()
 
 
 if __name__ == "__main__":
