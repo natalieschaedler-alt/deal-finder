@@ -1,8 +1,10 @@
 from search.compliance import (
     build_compliant_offer,
     extract_city_region,
+    fetch_public_soup,
     infer_condition_and_accessories,
     is_public_listing_url,
+    parse_price_eur,
     sanitize_text,
 )
 
@@ -73,3 +75,23 @@ def test_build_compliant_offer_returns_only_allowed_fields_and_sanitized_values(
     }
     assert "@" not in offer["offer_description"]
     assert "1234567" not in offer["offer_description"]
+
+
+def test_parse_price_eur_handles_common_formats():
+    assert parse_price_eur("1.249,00 EUR") == 1249.0
+    assert parse_price_eur("999 €") == 999.0
+    assert parse_price_eur("Preis auf Anfrage") == 0.0
+
+
+def test_fetch_public_soup_blocks_non_public_urls(monkeypatch):
+    called = {"value": False}
+
+    def fake_get(*args, **kwargs):
+        called["value"] = True
+        raise RuntimeError("should not be called")
+
+    monkeypatch.setattr("search.compliance.requests.get", fake_get)
+    soup = fetch_public_soup("https://example.com/login")
+
+    assert soup is None
+    assert not called["value"]

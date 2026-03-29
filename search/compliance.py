@@ -2,6 +2,9 @@ import re
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
+import requests
+from bs4 import BeautifulSoup
+
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?:\+?\d[\d\s()./-]{6,}\d)")
@@ -13,6 +16,12 @@ _ADDRESS_SIMPLE_RE = re.compile(
     r"\b[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]*(?:straße|str\.?|weg|allee|platz|gasse)\s*\d+[a-zA-Z]?\b",
     flags=re.IGNORECASE,
 )
+_PRICE_RE = re.compile(r"(\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)")
+
+DEFAULT_HEADERS = {
+    "User-Agent": "DealFinderBot/1.0 (+private analysis; respectful rate limits)",
+    "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+}
 
 
 def sanitize_text(text: str) -> str:
@@ -48,6 +57,29 @@ def is_public_listing_url(url: str) -> bool:
     query = (parsed.query or "").lower()
     text = f"{path} {query}"
     return not any(fragment in text for fragment in blocked_fragments)
+
+
+def parse_price_eur(text: str) -> float:
+    value = str(text or "")
+    match = _PRICE_RE.search(value.replace("EUR", "").replace("€", ""))
+    if not match:
+        return 0.0
+    raw = match.group(1).replace(".", "").replace(" ", "").replace(",", ".")
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 0.0
+
+
+def fetch_public_soup(url: str, params: Optional[dict] = None, timeout: int = 12) -> Optional[BeautifulSoup]:
+    if not is_public_listing_url(url):
+        return None
+    try:
+        response = requests.get(url, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
+        response.raise_for_status()
+    except Exception:
+        return None
+    return BeautifulSoup(response.text, "html.parser")
 
 
 def infer_condition_and_accessories(
