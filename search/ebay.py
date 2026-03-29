@@ -8,6 +8,7 @@ import requests
 
 from config.manager import ConfigManager
 from database.models import Product
+from search.compliance import build_compliant_offer
 
 class EbaySearch:
     FINDING_API_URL = "https://svcs.ebay.com/services/search/FindingService/v1"
@@ -45,19 +46,20 @@ class EbaySearch:
             else ""
         )
 
-        return {
-            "offer_title": item.get("title", [product.name])[0],
-            "offer_price": offer_price,
-            "offer_url": item.get("viewItemURL", [""])[0],
-            "image_urls": [item.get("galleryURL", [""])[0]] if item.get("galleryURL") else [],
-            "location": item.get("location", [""])[0],
-            "condition": item_condition,
-            "accessories": product.accessories,
-            "resale_price": round(target_resale, 2),
-            "seller_rating": 5,
-            "is_fake": False,
-            "listing_age_days": EbaySearch._listing_age_days(listing_start),
-        }
+        return build_compliant_offer(
+            title=item.get("title", [product.name])[0],
+            price=offer_price,
+            description=item.get("subtitle", [""])[0] if item.get("subtitle") else "",
+            location=item.get("location", [""])[0],
+            link=item.get("viewItemURL", [""])[0],
+            condition=item_condition,
+            accessories=product.accessories,
+            source_platform="eBay",
+            resale_price=round(target_resale, 2),
+            seller_rating=5,
+            listing_age_days=EbaySearch._listing_age_days(listing_start),
+            image_urls=[item.get("galleryURL", [""])[0]] if item.get("galleryURL") else [],
+        )
 
     def _request(self, operation_name: str, product_name: str) -> Dict:
         app_id = os.getenv("EBAY_APP_ID") or self.config.get("ebay_app_id", "")
@@ -123,7 +125,9 @@ class EbaySearch:
         offers = []
         for item in raw_items:
             try:
-                offers.append(self._to_offer(item, product))
+                mapped = self._to_offer(item, product)
+                if mapped:
+                    offers.append(mapped)
             except Exception:
                 continue
         return offers

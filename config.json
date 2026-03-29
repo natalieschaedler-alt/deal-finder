@@ -10,6 +10,8 @@
   "ebay_global_id": "EBAY-DE",
   "ebay_result_limit": 10,
   "ebay_timeout_seconds": 10,
+  "scrape_request_pause_seconds": 1.5,
+  "scrape_max_platforms_per_run": 7,
   "enable_image_analysis": true,
   "enable_vision_analysis": true,
   "image_analysis_timeout_seconds": 5,
