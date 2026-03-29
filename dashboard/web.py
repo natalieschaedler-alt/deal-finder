@@ -13,6 +13,13 @@ from logic.workflow import run_search_workflow
 
 APP_CSS = """
 <style>
+    :root {
+        --text-main: #18222c;
+        --text-muted: #3b4c5a;
+        --surface-strong: rgba(255, 255, 255, 0.95);
+        --surface-soft: rgba(255, 255, 255, 0.9);
+        --border-soft: rgba(22, 32, 44, 0.14);
+    }
     .stApp {
         background:
             radial-gradient(circle at top left, rgba(255, 213, 128, 0.35), transparent 28%),
@@ -24,48 +31,83 @@ APP_CSS = """
         padding-top: 2rem;
         padding-bottom: 3rem;
     }
+    p, li, label, .stMarkdown, .stText, .stCaption {
+        font-size: 1.02rem;
+        line-height: 1.55;
+        color: var(--text-main);
+    }
     h1, h2, h3 {
         font-family: Avenir Next, Futura, Segoe UI, sans-serif;
         letter-spacing: -0.02em;
+        color: var(--text-main);
     }
+    h1 { font-size: 2.1rem; }
+    h2 { font-size: 1.55rem; }
+    h3 { font-size: 1.2rem; }
     .hero-card {
         padding: 1.4rem 1.5rem;
         border-radius: 24px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(22, 32, 44, 0.08);
+        background: var(--surface-strong);
+        border: 1px solid var(--border-soft);
         box-shadow: 0 18px 48px rgba(25, 42, 70, 0.08);
         backdrop-filter: blur(10px);
+    }
+    .hero-card p {
+        font-size: 1.06rem;
+        color: var(--text-main);
     }
     .metric-card {
         padding: 1rem 1.1rem;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid rgba(22, 32, 44, 0.08);
+        background: var(--surface-soft);
+        border: 1px solid var(--border-soft);
         min-height: 112px;
     }
     .metric-label {
-        font-size: 0.84rem;
+        font-size: 0.88rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #5f6a72;
+        color: var(--text-muted);
         margin-bottom: 0.35rem;
+        font-weight: 600;
     }
     .metric-value {
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: #1f2a33;
+        color: var(--text-main);
     }
     .metric-sub {
-        font-size: 0.88rem;
-        color: #61707b;
+        font-size: 0.93rem;
+        color: var(--text-muted);
         margin-top: 0.2rem;
     }
     .section-card {
         padding: 1rem 1.1rem;
         border-radius: 20px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(22, 32, 44, 0.08);
+        background: var(--surface-soft);
+        border: 1px solid var(--border-soft);
         box-shadow: 0 14px 36px rgba(25, 42, 70, 0.06);
+    }
+    div[data-testid="stDataFrame"] {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #ffffff;
+    }
+    div[data-testid="stDataFrame"] * {
+        font-size: 0.96rem !important;
+        color: var(--text-main) !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"] {
+        font-size: 1.02rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        color: #0f5a9a;
+    }
+    .stButton > button {
+        font-size: 1rem;
+        font-weight: 600;
     }
 </style>
 """
