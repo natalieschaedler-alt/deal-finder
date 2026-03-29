@@ -16,29 +16,36 @@ from logic.workflow import run_search_workflow
 APP_CSS = """
 <style>
     :root {
-        --text-main: #18222c;
-        --text-muted: #3b4c5a;
-        --surface-strong: rgba(255, 255, 255, 0.95);
-        --surface-soft: rgba(255, 255, 255, 0.9);
-        --border-soft: rgba(22, 32, 44, 0.14);
+        --bg-main: #0b0f14;
+        --bg-alt: #121821;
+        --surface-strong: rgba(16, 22, 30, 0.97);
+        --surface-soft: rgba(18, 24, 33, 0.94);
+        --surface-card: rgba(20, 27, 36, 0.96);
+        --border-soft: rgba(255, 255, 255, 0.08);
+        --text-main: #f5f7fb;
+        --text-muted: #94a3b8;
+        --green: #35d07f;
+        --red: #ff6b6b;
+        --yellow: #f4c84f;
+        --blue: #68a7ff;
     }
     .stApp {
         background:
-            radial-gradient(circle at top left, rgba(255, 213, 128, 0.35), transparent 28%),
-            radial-gradient(circle at top right, rgba(94, 197, 255, 0.28), transparent 24%),
-            linear-gradient(180deg, #f6f1e8 0%, #eef3f7 100%);
+            radial-gradient(circle at top left, rgba(53, 208, 127, 0.11), transparent 28%),
+            radial-gradient(circle at top right, rgba(104, 167, 255, 0.10), transparent 24%),
+            linear-gradient(180deg, #090d12 0%, #0f141b 100%);
     }
     [data-testid="stAppViewContainer"] {
         background:
-            radial-gradient(circle at top left, rgba(255, 213, 128, 0.35), transparent 28%),
-            radial-gradient(circle at top right, rgba(94, 197, 255, 0.28), transparent 24%),
-            linear-gradient(180deg, #f6f1e8 0%, #eef3f7 100%) !important;
+            radial-gradient(circle at top left, rgba(53, 208, 127, 0.11), transparent 28%),
+            radial-gradient(circle at top right, rgba(104, 167, 255, 0.10), transparent 24%),
+            linear-gradient(180deg, #090d12 0%, #0f141b 100%) !important;
     }
     [data-testid="stHeader"] {
-        background: rgba(246, 241, 232, 0.82) !important;
+        background: rgba(9, 13, 18, 0.76) !important;
     }
     section[data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.92) !important;
+        background: rgba(9, 13, 18, 0.95) !important;
         border-right: 1px solid var(--border-soft);
     }
     section[data-testid="stSidebar"] * {
@@ -66,21 +73,40 @@ APP_CSS = """
     h2 { font-size: 1.55rem; }
     h3 { font-size: 1.2rem; }
     .hero-card {
-        padding: 1.4rem 1.5rem;
-        border-radius: 24px;
+        padding: 1.65rem 1.7rem;
+        border-radius: 28px;
         background: var(--surface-strong);
         border: 1px solid var(--border-soft);
-        box-shadow: 0 18px 48px rgba(25, 42, 70, 0.08);
+        box-shadow: 0 20px 52px rgba(0, 0, 0, 0.28);
         backdrop-filter: blur(10px);
     }
     .hero-card p {
         font-size: 1.06rem;
-        color: var(--text-main);
+        color: var(--text-muted);
+    }
+    .eyebrow {
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--green);
+        font-weight: 800;
+        margin-bottom: 0.8rem;
+    }
+    .hero-grid {
+        display: grid;
+        grid-template-columns: 1.45fr 0.85fr;
+        gap: 1rem;
+    }
+    .hero-stat {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 18px;
+        padding: 1rem;
     }
     .metric-card {
         padding: 1rem 1.1rem;
         border-radius: 18px;
-        background: var(--surface-soft);
+        background: linear-gradient(180deg, rgba(20, 27, 36, 0.96) 0%, rgba(15, 21, 29, 0.98) 100%);
         border: 1px solid var(--border-soft);
         min-height: 112px;
     }
@@ -107,7 +133,13 @@ APP_CSS = """
         border-radius: 20px;
         background: var(--surface-soft);
         border: 1px solid var(--border-soft);
-        box-shadow: 0 14px 36px rgba(25, 42, 70, 0.06);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
+    }
+    .top-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.95rem;
+        margin: 1rem 0 1.35rem;
     }
     .status-grid {
         display: grid;
@@ -116,7 +148,7 @@ APP_CSS = """
         margin: 0.8rem 0 0.25rem;
     }
     .status-card {
-        background: rgba(255, 255, 255, 0.96);
+        background: var(--surface-card);
         border: 1px solid var(--border-soft);
         border-radius: 18px;
         padding: 0.95rem 1rem;
@@ -140,10 +172,108 @@ APP_CSS = """
         color: var(--text-muted);
     }
     .checklist-card {
-        background: rgba(255, 255, 255, 0.96);
+        background: var(--surface-card);
         border: 1px solid var(--border-soft);
         border-radius: 20px;
         padding: 1rem 1.1rem;
+    }
+    .deal-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+    .deal-card {
+        background: linear-gradient(180deg, rgba(18, 24, 33, 0.98) 0%, rgba(13, 18, 25, 0.98) 100%);
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1rem;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
+    }
+    .deal-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.8rem;
+    }
+    .deal-title {
+        font-size: 1.12rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 0.22rem;
+    }
+    .deal-subtitle {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+    }
+    .score-pill, .signal-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.28rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+    .score-top { background: rgba(53, 208, 127, 0.14); color: var(--green); border-color: rgba(53, 208, 127, 0.26); }
+    .score-good { background: rgba(244, 200, 79, 0.12); color: var(--yellow); border-color: rgba(244, 200, 79, 0.24); }
+    .score-low { background: rgba(255, 107, 107, 0.12); color: var(--red); border-color: rgba(255, 107, 107, 0.24); }
+    .signal-buy { background: rgba(53, 208, 127, 0.14); color: var(--green); border-color: rgba(53, 208, 127, 0.26); }
+    .signal-watch { background: rgba(244, 200, 79, 0.12); color: var(--yellow); border-color: rgba(244, 200, 79, 0.24); }
+    .signal-risk { background: rgba(255, 107, 107, 0.12); color: var(--red); border-color: rgba(255, 107, 107, 0.24); }
+    .deal-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0 0.8rem;
+    }
+    .deal-metric {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 0.8rem;
+    }
+    .deal-metric-label {
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 0.3rem;
+    }
+    .deal-metric-value {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: var(--text-main);
+    }
+    .deal-insights {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 0.85rem;
+    }
+    .insight-chip {
+        padding: 0.32rem 0.6rem;
+        border-radius: 999px;
+        background: rgba(104, 167, 255, 0.10);
+        color: #8ebfff;
+        font-size: 0.84rem;
+        border: 1px solid rgba(104, 167, 255, 0.18);
+    }
+    .premium-panel {
+        background: linear-gradient(135deg, rgba(53, 208, 127, 0.08) 0%, rgba(104, 167, 255, 0.08) 100%), var(--surface-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1rem 1.1rem;
+    }
+    .alert-banner {
+        border: 1px solid rgba(53, 208, 127, 0.22);
+        background: rgba(53, 208, 127, 0.08);
+        color: #b7ffd5;
+        border-radius: 18px;
+        padding: 0.9rem 1rem;
+        margin: 1rem 0 0.2rem;
+        font-weight: 700;
     }
     .checklist-card ol {
         margin: 0.2rem 0 0;
@@ -155,7 +285,7 @@ APP_CSS = """
     div[data-testid="stDataFrame"] {
         border: 1px solid var(--border-soft);
         border-radius: 12px;
-        background: #ffffff;
+        background: #111720;
     }
     div[data-testid="stDataFrame"] * {
         font-size: 0.96rem !important;
@@ -167,7 +297,7 @@ APP_CSS = """
         color: var(--text-main);
     }
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-        color: #0f5a9a;
+        color: var(--green);
     }
     .stButton > button {
         font-size: 1rem;
@@ -187,7 +317,7 @@ APP_CSS = """
     .stTextArea textarea,
     .stSelectbox div[data-baseweb="select"] > div,
     .stNumberInput input {
-        background: #ffffff;
+        background: #111720;
         color: var(--text-main);
         border: 1px solid var(--border-soft);
         font-size: 1rem;
@@ -196,25 +326,25 @@ APP_CSS = """
         color: var(--text-main) !important;
     }
     div[data-baseweb="menu"] {
-        background: #ffffff !important;
+        background: #111720 !important;
         border: 1px solid var(--border-soft) !important;
     }
     div[data-baseweb="menu"] li {
-        background: #ffffff !important;
+        background: #111720 !important;
     }
     .stAlert {
-        background: rgba(255, 255, 255, 0.93) !important;
+        background: rgba(17, 23, 32, 0.95) !important;
         color: var(--text-main) !important;
         border: 1px solid var(--border-soft) !important;
     }
     code {
-        background: rgba(15, 90, 154, 0.08);
-        color: #0b4678;
+        background: rgba(104, 167, 255, 0.12);
+        color: #9cc6ff;
         padding: 0.08rem 0.3rem;
         border-radius: 6px;
     }
-    a {
-        color: #0f5a9a !important;
+    a, a:visited {
+        color: #8ebfff !important;
         font-weight: 600;
     }
     @media (max-width: 900px) {
@@ -230,6 +360,12 @@ APP_CSS = """
         }
         .metric-value {
             font-size: 1.55rem;
+        }
+        .top-strip,
+        .deal-grid,
+        .hero-grid,
+        .deal-metrics {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -276,6 +412,215 @@ def _safe_float_series(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(dtype=float)
     return pd.to_numeric(frame[column], errors="coerce").fillna(0.0)
+
+
+def _format_currency(value) -> str:
+    try:
+        return f"{float(value):,.0f} EUR".replace(",", ".")
+    except Exception:
+        return "-"
+
+
+def _score_class(score: float) -> str:
+    if score >= 90:
+        return "score-top"
+    if score >= 70:
+        return "score-good"
+    return "score-low"
+
+
+def _score_label(score: float) -> str:
+    if score >= 90:
+        return "Top Deal"
+    if score >= 70:
+        return "Gut"
+    return "Uninteressant"
+
+
+def _signal_class(action: str) -> str:
+    if action == "KAUFEN":
+        return "signal-buy"
+    if action == "BEOBACHTEN":
+        return "signal-watch"
+    return "signal-risk"
+
+
+def _signal_label(row: pd.Series) -> str:
+    action = str(row.get("Aktion", "WARTEN"))
+    if action == "KAUFEN":
+        return "Kaufen"
+    if action == "BEOBACHTEN":
+        return "Beobachten"
+    if action == "IGNORIEREN":
+        return "Riskant"
+    return "Beobachten"
+
+
+def _platform_from_link(link: str) -> str:
+    link = str(link or "").lower()
+    if "ebay" in link:
+        return "eBay"
+    if "kleinanzeigen" in link:
+        return "Kleinanzeigen"
+    if "facebook" in link:
+        return "Facebook"
+    if "vinted" in link:
+        return "Vinted"
+    if "willhaben" in link:
+        return "Willhaben"
+    if "shpock" in link:
+        return "Shpock"
+    return "Marketplace"
+
+
+def _speed_label(row: pd.Series) -> str:
+    sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
+    score = float(row.get("Chance_Score", 0) or 0)
+    if sold_count >= 5 or score >= 90:
+        return "Verkauf schnell"
+    if sold_count >= 2 or score >= 70:
+        return "Verkauf solide"
+    return "Verkauf langsam"
+
+
+def _safety_label(row: pd.Series) -> str:
+    quality = str(row.get("Datenbasis", "Fallback"))
+    risk = str(row.get("Risiko", "")).lower()
+    if quality == "Echt" and "ok" in risk:
+        return "Verkaeufer sicher"
+    if quality == "Echt":
+        return "Risiko pruefen"
+    return "Nur Fallback-Daten"
+
+
+def _category_for_product(products: list[Product]) -> dict:
+    return {product.name: product.category for product in products}
+
+
+def _render_top_strip(deals: pd.DataFrame, products: list[Product]) -> None:
+    if deals.empty:
+        return
+
+    category_map = _category_for_product(products)
+    working = deals.copy()
+    working["Netto-Gewinn"] = _safe_float_series(working, "Netto-Gewinn")
+    working["Chance_Score"] = _safe_float_series(working, "Chance_Score")
+    working["Kategorie"] = working["Produkt"].map(category_map).fillna("Allgemein")
+
+    best_category = "-"
+    if not working.empty:
+        category_summary = working.groupby("Kategorie")["Netto-Gewinn"].sum().sort_values(ascending=False)
+        if not category_summary.empty:
+            best_category = str(category_summary.index[0])
+
+    top_deals = int((working["Chance_Score"] >= 90).sum())
+    total_profit = working["Netto-Gewinn"].sum()
+
+    st.markdown(
+        f"""
+        <div class="top-strip">
+            <div class="metric-card"><div class="metric-label">Deals heute</div><div class="metric-value">{len(working)}</div><div class="metric-sub">Aktive Chancen im Feed</div></div>
+            <div class="metric-card"><div class="metric-label">Gewinnpotenzial</div><div class="metric-value">{_format_currency(total_profit)}</div><div class="metric-sub">Summierter Netto-Gewinn</div></div>
+            <div class="metric-card"><div class="metric-label">Beste Kategorie</div><div class="metric-value">{best_category}</div><div class="metric-sub">Derzeit staerkste Nische</div></div>
+            <div class="metric-card"><div class="metric-label">Neue Top Deals</div><div class="metric-value">{top_deals}</div><div class="metric-sub">Score 90 oder hoeher</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_alert_banner(deals: pd.DataFrame) -> None:
+    if deals.empty:
+        return
+    top = deals.copy()
+    top["Netto-Gewinn"] = _safe_float_series(top, "Netto-Gewinn")
+    top["Chance_Score"] = _safe_float_series(top, "Chance_Score")
+    top = top.sort_values(by=["Chance_Score", "Netto-Gewinn"], ascending=False)
+    best = top.iloc[0]
+    if float(best.get("Chance_Score", 0) or 0) >= 80:
+        st.markdown(
+            f"<div class='alert-banner'>Neuer Deal: +{float(best.get('Netto-Gewinn', 0) or 0):.0f} EUR Gewinn bei {best.get('Produkt', 'Top-Angebot')}</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def _render_market_analysis(deals: pd.DataFrame, products: list[Product]) -> None:
+    st.markdown("### Marktanalyse")
+    if deals.empty:
+        st.info("Noch keine Marktsignale vorhanden.")
+        return
+
+    category_map = _category_for_product(products)
+    working = deals.copy()
+    working["Kategorie"] = working["Produkt"].map(category_map).fillna("Allgemein")
+    working["Netto-Gewinn"] = _safe_float_series(working, "Netto-Gewinn")
+    working["Chance_Score"] = _safe_float_series(working, "Chance_Score")
+
+    summary = (
+        working.groupby("Kategorie")
+        .agg(Deals=("Produkt", "count"), Gewinn=("Netto-Gewinn", "sum"), Score=("Chance_Score", "mean"))
+        .reset_index()
+        .sort_values(by=["Gewinn", "Score"], ascending=False)
+    )
+
+    if summary.empty:
+        st.info("Noch keine Kategorien ausgewertet.")
+        return
+
+    def trend_icon(row: pd.Series) -> str:
+        if row["Score"] >= 80:
+            return "↑"
+        if row["Score"] >= 60:
+            return "→"
+        return "↓"
+
+    summary["Trend"] = summary.apply(trend_icon, axis=1)
+    summary["Gewinn"] = summary["Gewinn"].map(lambda value: _format_currency(value))
+    summary["Score"] = summary["Score"].round(1)
+
+    st.markdown("<div class='premium-panel'>", unsafe_allow_html=True)
+    st.dataframe(summary[["Kategorie", "Trend", "Deals", "Gewinn", "Score"]], use_container_width=True, hide_index=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_deal_cards(filtered: pd.DataFrame) -> None:
+    if filtered.empty:
+        st.info("Mit diesen Filtern gibt es keine Deals.")
+        return
+
+    card_rows = []
+    for _, row in filtered.head(12).iterrows():
+        score = float(row.get("Chance_Score", 0) or 0)
+        signal = _signal_label(row)
+        score_class = _score_class(score)
+        signal_class = _signal_class(str(row.get("Aktion", signal)).upper())
+        platform = _platform_from_link(str(row.get("Link", "")))
+        card_rows.append(
+            f"""
+            <div class="deal-card">
+                <div class="deal-top">
+                    <div>
+                        <div class="deal-title">{row.get('Produkt', '-')}</div>
+                        <div class="deal-subtitle">{platform} · {row.get('Zustand', row.get('Vision_Quelle', 'Marktplatz'))}</div>
+                    </div>
+                    <div class="score-pill {score_class}">{_score_label(score)} · {score:.0f}/100</div>
+                </div>
+                <div class="deal-metrics">
+                    <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
+                </div>
+                <div class="deal-insights">
+                    <span class="signal-pill {signal_class}">{signal}</span>
+                    <span class="insight-chip">{_safety_label(row)}</span>
+                    <span class="insight-chip">{_speed_label(row)}</span>
+                    <span class="insight-chip">ROI {float(row.get('ROI_%', 0) or 0):.0f}%</span>
+                </div>
+            </div>
+            """
+        )
+
+    st.markdown("<div class='deal-grid'>" + "".join(card_rows) + "</div>", unsafe_allow_html=True)
 
 
 def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
@@ -351,9 +696,19 @@ def _render_hero(last_run_summary: str):
     st.markdown(
         f"""
         <div class="hero-card">
-            <h1>Deal Finder Control Room</h1>
-            <p>Ein Klick startet Suche, Preislogik, Bildbewertung, Budgetplan und Export. Danach kannst du Deals sofort kaufen, beobachten oder ignorieren.</p>
-            <p><strong>Letzter Lauf:</strong> {last_run_summary}</p>
+            <div class="hero-grid">
+                <div>
+                    <div class="eyebrow">Deal Intelligence</div>
+                    <h1>Finde profitable Deals schneller als andere.</h1>
+                    <p>Der Feed wirkt jetzt wie ein echtes Geld-Tool: klare Signale, harte Scores, dunkles Premium-Design und ein schneller Blick auf Gewinn, Risiko und Tempo.</p>
+                    <p><strong>Letzter Lauf:</strong> {last_run_summary}</p>
+                </div>
+                <div class="hero-stat">
+                    <div class="metric-label">Was Nutzer sofort verstehen sollen</div>
+                    <div class="metric-value">Hier verdient man Geld.</div>
+                    <div class="metric-sub">Nicht Datenbank, sondern Entscheidungsmaschine fuer Kauf, Beobachtung und Timing.</div>
+                </div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -517,8 +872,8 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
 
     _render_hero(st.session_state["last_run_summary"])
 
-    control_cols = st.columns([1.2, 1, 1])
-    if control_cols[0].button("Deals jetzt aktualisieren", use_container_width=True, type="primary"):
+    control_cols = st.columns([1.5, 1, 1])
+    if control_cols[0].button("Jetzt scannen", use_container_width=True, type="primary"):
         with st.spinner("Suche laeuft, Deals werden neu berechnet..."):
             result = run_search_workflow(show_console=False, enable_notifications=False, export_files=True)
         st.session_state["last_run_summary"] = (
@@ -528,7 +883,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
         st.rerun()
     if control_cols[1].button("Daten neu laden", use_container_width=True):
         st.rerun()
-    if control_cols[2].button("Shopping-Plan fokussieren", use_container_width=True):
+    if control_cols[2].button("Top-Deals fokussieren", use_container_width=True):
         st.session_state["only_recommended"] = True
         st.rerun()
 
@@ -544,23 +899,25 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 "Viele Deals basieren noch auf Fallback-Daten. Fuer echte Marktdaten bitte ebay_app_id setzen."
             )
 
+    _render_alert_banner(deals)
+
     with st.sidebar:
-        st.markdown("## Deal Finder")
-        st.markdown("Diese Seite ist fuer Betreiber und Nutzer gedacht, die schnell profitable Gebrauchtwaren-Deals finden wollen.")
-        st.markdown("### Schnellnavigation")
-        st.markdown("1. Dashboard lesen")
-        st.markdown("2. Deals filtern")
-        st.markdown("3. Produkte pflegen")
-        st.markdown("4. Verlauf kontrollieren")
-        st.markdown("### Tipp")
-        st.markdown("Wenn andere das System nutzen sollen, ist ein eBay API-Key der wichtigste Upgrade-Schritt.")
+        st.markdown("## Deal Flow")
+        st.markdown("TradingView fuer Gebrauchtwaren: wenige Entscheidungen, klare Signale, hoher Fokus auf Gewinn.")
+        st.markdown("### System")
+        st.markdown("- Dunkler Premium-Modus")
+        st.markdown("- Deal Scores statt Datensalat")
+        st.markdown("- Aktionen fuer Kaufen / Beobachten / Risiko")
+        st.markdown("### Wichtig")
+        st.markdown("Echte Live-Daten werden am besten mit eBay API-Key.")
 
     tabs = st.tabs(["Dashboard", "Deals", "Produkte", "Aktivitaeten", "Setup & Hilfe"])
 
     with tabs[0]:
+        _render_top_strip(deals, current_products)
         _render_system_status(config, len(current_products), deals)
         if deals.empty:
-            st.warning("Noch keine Deals vorhanden. Klicke oben auf 'Deals jetzt aktualisieren'.")
+            st.warning("Noch keine Deals vorhanden. Klicke oben auf 'Jetzt scannen'.")
         else:
             metric_cols = st.columns(5)
             with metric_cols[0]:
@@ -584,33 +941,38 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                     st.dataframe(shopping_plan, use_container_width=True, hide_index=True)
             with plan_right:
                 st.markdown("### Schnellstart")
-                st.markdown("- Klick auf 'Deals jetzt aktualisieren' startet den kompletten Workflow")
-                st.markdown("- In 'Deals' kannst du Details prüfen und Aktionen speichern")
-                st.markdown("- In 'Produkte' kannst du neue Zielprodukte hinzufügen")
-                st.markdown("- In 'Aktivitaeten' siehst du deinen Verlauf")
+                st.markdown("- Jetzt scannen startet Suche, Bewertung und Budgetplan")
+                st.markdown("- Deal-Karten zeigen sofort Gewinn, Score und Signal")
+                st.markdown("- Produkte-Tab verwaltet deine Zielobjekte")
+                st.markdown("- Aktivitaeten zeigen die Nutzung im Alltag")
 
+        _render_market_analysis(deals, current_products)
         _render_data_quality_panel()
 
     with tabs[1]:
         if deals.empty:
             st.info("Noch keine Deals vorhanden.")
         else:
-            st.markdown("### Deals im Klartext")
-            filter_cols = st.columns(4)
-            min_netto = filter_cols[0].number_input("Mindest Netto-Gewinn", value=0.0, step=10.0)
-            max_price = filter_cols[1].number_input("Maximaler Einkauf", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
-            only_buy = filter_cols[2].checkbox("Nur KAUFEN", value=True)
-            only_recommended = filter_cols[3].checkbox("Nur Shopping-Plan", value=st.session_state.get("only_recommended", False))
-            st.session_state["only_recommended"] = only_recommended
-
-            products = sorted([value for value in deals.get("Produkt", pd.Series(dtype=str)).dropna().unique().tolist()])
-            selected_product = st.selectbox("Produkt filtern", options=["Alle"] + products)
+            st.markdown("### Deal Feed")
+            layout_cols = st.columns([0.34, 0.66])
+            with layout_cols[0]:
+                st.markdown("### Filter")
+                min_netto = st.number_input("Mindestgewinn", value=0.0, step=10.0)
+                max_price = st.number_input("Maximaler Einkauf", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
+                min_score = st.slider("Deal Score", min_value=0, max_value=100, value=50, step=5)
+                only_buy = st.checkbox("Nur KAUFEN", value=True)
+                only_recommended = st.checkbox("Nur Top-Angebote", value=st.session_state.get("only_recommended", False))
+                st.session_state["only_recommended"] = only_recommended
+                products = sorted([value for value in deals.get("Produkt", pd.Series(dtype=str)).dropna().unique().tolist()])
+                selected_product = st.selectbox("Kategorie / Produkt", options=["Alle"] + products)
 
             filtered = deals.copy()
             filtered["Netto-Gewinn"] = _safe_float_series(filtered, "Netto-Gewinn")
             filtered["Einkauf"] = _safe_float_series(filtered, "Einkauf")
+            filtered["Chance_Score"] = _safe_float_series(filtered, "Chance_Score")
             filtered = filtered[filtered["Netto-Gewinn"] >= min_netto]
             filtered = filtered[filtered["Einkauf"] <= max_price]
+            filtered = filtered[filtered["Chance_Score"] >= min_score]
             if only_buy and "Aktion" in filtered.columns:
                 filtered = filtered[filtered["Aktion"] == "KAUFEN"]
             if only_recommended and "Empfohlener_Kauf" in filtered.columns:
@@ -618,10 +980,13 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             if selected_product != "Alle":
                 filtered = filtered[filtered["Produkt"] == selected_product]
 
-            readable = _build_deals_readable_table(filtered)
-            st.dataframe(readable, use_container_width=True, hide_index=True)
+            with layout_cols[1]:
+                _render_deal_cards(filtered)
+                st.markdown("### Tabellenansicht")
+                readable = _build_deals_readable_table(filtered)
+                st.dataframe(readable, use_container_width=True, hide_index=True)
             if filtered.empty:
-                st.info("Mit diesen Filtern gibt es keine Deals.")
+                pass
             else:
                 selection_options = {
                     f"{row['Produkt']} | {row.get('Einkauf', '-')} EUR | Chance {row.get('Chance_Score', '-')}": row["Deal_ID"]
