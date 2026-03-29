@@ -23,6 +23,7 @@ env/
 
 # Runtime-Daten (werden neu generiert)
 database/deal_actions.json
+database/live_runs.jsonl
 dd/
 
 # Logs & Exports

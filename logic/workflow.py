@@ -20,6 +20,7 @@ def run_search_workflow(
     from logic.vision_analysis import inspect_listing_images
     from logic.budget_optimizer import optimize_deal_selection
     from logic.deal_identity import build_deal_id
+    from database.live_data_archive import append_search_snapshot
     from dashboard.display import show_deals
     from dashboard.export import export_budget_plan_csv, export_deals_csv
     from dashboard.filters import sort_deals
@@ -46,6 +47,10 @@ def run_search_workflow(
     vision_provider_name = config.get("vision_provider_name", "OpenAI-kompatibel")
     max_purchase_budget = float(config.get("max_purchase_budget", 0))
     max_budget_items = int(config.get("max_budget_items", 0))
+    allow_demo_fallback = bool(config.get("allow_demo_fallback_offers", True))
+    require_real_market_data = bool(config.get("require_real_market_data", False))
+    collect_live_data = bool(config.get("collect_live_data", True))
+    live_archive_path = str(config.get("live_data_archive_path", "database/live_runs.jsonl"))
 
     if config.get("auto_discover_products", False):
         discovered = discover_best_products(search_manager, config)
@@ -66,20 +71,35 @@ def run_search_workflow(
         sold_history_global = market_metrics.get("sold_history", [])
 
         if not offers:
-            offers = [
-                {
-                    "offer_title": f"{product.name} fast neu",
-                    "offer_price": product.max_price - 20,
-                    "offer_url": "https://beispiel.de/angebot1",
-                    "image_urls": [],
-                    "location": config.get("default_location", "Berlin"),
-                    "condition": product.condition,
-                    "accessories": product.accessories,
-                    "resale_price": product.min_resale_price + 50,
-                    "seller_rating": 5,
-                    "is_fake": False,
-                }
-            ]
+            if allow_demo_fallback:
+                offers = [
+                    {
+                        "offer_title": f"{product.name} fast neu",
+                        "offer_price": product.max_price - 20,
+                        "offer_url": "https://beispiel.de/angebot1",
+                        "image_urls": [],
+                        "location": config.get("default_location", "Berlin"),
+                        "condition": product.condition,
+                        "accessories": product.accessories,
+                        "resale_price": product.min_resale_price + 50,
+                        "seller_rating": 5,
+                        "is_fake": False,
+                        "source_platform": "DemoFallback",
+                    }
+                ]
+            else:
+                offers = []
+
+        if collect_live_data:
+            try:
+                append_search_snapshot(
+                    product_name=product.name,
+                    offers=offers,
+                    market_metrics=market_metrics,
+                    filepath=live_archive_path,
+                )
+            except Exception as exc:
+                logger.warning("Live-Daten Archiv konnte nicht geschrieben werden: %s", exc)
 
         for angebot in offers:
             demand = estimate_demand(product.name)
@@ -160,6 +180,7 @@ def run_search_workflow(
                 and angebot["offer_price"] <= pricing["max_buy_price"]
                 and net_profit >= min_net_profit
                 and opportunity_score >= float(config.get("min_opportunity_score", 30))
+                and (has_live_market_data or not require_real_market_data)
                 else "WARTEN"
             )
             deal = Deal(

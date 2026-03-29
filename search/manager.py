@@ -26,6 +26,9 @@ class SearchManager:
         for platform in self.platforms:
             try:
                 results = platform.search(product)
+                for item in results:
+                    if isinstance(item, dict):
+                        item.setdefault("source_platform", platform.__class__.__name__)
                 deals.extend(results)
             except Exception as e:
                 print(f"Fehler bei {platform.__class__.__name__}: {e}")

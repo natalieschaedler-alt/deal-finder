@@ -376,6 +376,13 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
     actions_df = _load_actions_dataframe(actions_path)
     shopping_plan = _load_shopping_plan()
 
+    if not deals.empty and "Datenbasis" in deals.columns:
+        real_ratio = float((deals["Datenbasis"] == "Echt").mean() * 100)
+        if real_ratio < 50:
+            st.warning(
+                "Viele Deals basieren noch auf Fallback-Daten. Fuer echte Marktdaten bitte ebay_app_id setzen."
+            )
+
     tabs = st.tabs(["Uebersicht", "Deals", "Produkte", "Aktivitaeten"])
 
     with tabs[0]:
