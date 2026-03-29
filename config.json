@@ -1,5 +1,5 @@
 {
-  "search_interval_minutes": 10,
+  "search_interval_minutes": 20,
   "notify_email": "",
   "notify_telegram": "",
   "default_location": "Berlin",
@@ -10,7 +10,7 @@
   "ebay_global_id": "EBAY-DE",
   "ebay_result_limit": 10,
   "ebay_timeout_seconds": 10,
-  "scrape_request_pause_seconds": 1.5,
+  "scrape_request_pause_seconds": 2.5,
   "scrape_max_platforms_per_run": 7,
   "enable_image_analysis": true,
   "enable_vision_analysis": true,

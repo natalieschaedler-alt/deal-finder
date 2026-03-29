@@ -498,6 +498,30 @@ def _format_currency(value) -> str:
         return "-"
 
 
+def _format_ratio(value) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except Exception:
+        return "-"
+
+
+def _market_reference_text(row: pd.Series) -> str:
+    sold_market = _format_currency(row.get("Verkauft_Median", row.get("sold_price_median", 0)))
+    active_market = _format_currency(row.get("Aktiver_Marktwert", row.get("active_market_price", 0)))
+    warehouse_market = _format_currency(row.get("Warehouse_Marktwert", row.get("warehouse_market_price", 0)))
+    new_ceiling = _format_currency(row.get("Neupreis_Deckel", row.get("new_price_ceiling", 0)))
+    return (
+        f"Sold {sold_market} · Aktiv {active_market} · Warehouse {warehouse_market} · Neu {new_ceiling}"
+    )
+
+
+def _demand_reference_text(row: pd.Series) -> str:
+    ratio = _format_ratio(row.get("Verkauft_Aktiv_Ratio", row.get("sold_active_ratio", 0)))
+    trends = _format_ratio(row.get("Google_Trends_Score", row.get("google_trends_score", 0)))
+    bsr = _format_ratio(row.get("Amazon_BSR_Score", row.get("amazon_bsr_score", 0)))
+    return f"Sold/Aktiv {ratio} · Trends {trends} · BSR {bsr}"
+
+
 def _score_class(score: float) -> str:
     if score >= 90:
         return "score-top"
@@ -726,6 +750,12 @@ def _render_best_deal_spotlight(deals: pd.DataFrame) -> None:
                 <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
                 <div class="deal-metric"><div class="deal-metric-label">Netto-Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
             </div>
+            <div class="section-card" style="margin:0.2rem 0 0.9rem;">
+                <div class="metric-label">Marktquellen</div>
+                <div class="metric-sub">{_market_reference_text(row)}</div>
+                <div class="metric-label" style="margin-top:0.7rem;">Nachfragequellen</div>
+                <div class="metric-sub">{_demand_reference_text(row)}</div>
+            </div>
             {_score_breakdown_html(row)}
             <div class="deal-insights">
                 <span class="signal-pill {signal_class}">{signal}</span>
@@ -825,6 +855,10 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
                     <div class="deal-metric"><div class="deal-metric-label">Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
                     <div class="deal-metric"><div class="deal-metric-label"><span class="metric-help" title="Score kombiniert Gewinnpotenzial, Nachfrage, Zustand und Marktfit.">Score</span></div><div class="deal-metric-value">{score:.0f}/100</div></div>
                 </div>
+                <div class="section-card" style="margin:0.15rem 0 0.8rem;padding:0.8rem 0.9rem;">
+                    <div class="metric-label">Marktquellen</div>
+                    <div class="metric-sub">{_market_reference_text(row)}</div>
+                </div>
                 {_score_breakdown_html(row)}
                 <div class="deal-metrics">
                     <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
@@ -870,10 +904,16 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
         "Plattform",
         "Einkauf",
         "Ziel-Verkauf",
+        "Aktiver_Marktwert",
+        "Warehouse_Marktwert",
+        "Neupreis_Deckel",
         "Netto-Gewinn",
         "ROI_%",
         "Chance_Score",
         "Nachfrage_Score",
+        "Verkauft_Aktiv_Ratio",
+        "Google_Trends_Score",
+        "Amazon_BSR_Score",
         "Risiko_Score",
         "Verkäufer_Score",
         "Aktion",
@@ -889,6 +929,9 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
         "ROI_%": "ROI %",
         "Chance_Score": "Chance",
         "Nachfrage_Score": "Nachfrage",
+        "Verkauft_Aktiv_Ratio": "Sold/Aktiv",
+        "Google_Trends_Score": "Trends",
+        "Amazon_BSR_Score": "BSR",
         "Risiko_Score": "Risiko",
         "Verkäufer_Score": "Verkäufer",
         "Empfohlener_Kauf": "Plan",
@@ -1014,7 +1057,7 @@ def _render_setup_guide(config: ConfigManager) -> None:
         <div class="checklist-card">
             <ol>
                 <li>Im Tab <strong>Produkte</strong> Zielprodukte hinterlegen oder anpassen.</li>
-                <li>Oben auf <strong>Jetzt scannen</strong> klicken.</li>
+                <li>Oben auf <strong>Aktualisieren</strong> klicken, um den letzten automatischen Scrape-Stand zu laden.</li>
                 <li>Im Tab <strong>Übersicht / Dashboard</strong> den Top-Deal prüfen.</li>
                 <li>Im Tab <strong>Deals Feed</strong> filtern und Entscheidungen speichern.</li>
                 <li>Im Tab <strong>Marktanalyse</strong> Trends und echte Verkäufe prüfen.</li>
@@ -1104,20 +1147,11 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
 
     _render_hero(st.session_state["last_run_summary"])
 
-    control_cols = st.columns([1.5, 1, 1])
-    if control_cols[0].button("Jetzt scannen", use_container_width=True, type="primary"):
-        with st.spinner("Suche laeuft, Deals werden neu berechnet..."):
-            result = run_search_workflow(show_console=False, enable_notifications=False, export_files=True)
-        st.cache_data.clear()
-        st.session_state["last_run_summary"] = (
-            f"{len(result['deals'])} Deals, {len(result['selected_deals'])} Budget-Käufe, "
-            f"Budgetverbrauch {result['budget_plan']['total_spend']:.2f} EUR"
-        )
-        st.rerun()
-    if control_cols[1].button("Daten neu laden", use_container_width=True):
+    control_cols = st.columns([1.5, 1])
+    if control_cols[0].button("Aktualisieren", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.rerun()
-    if control_cols[2].button("Top-Deals fokussieren", use_container_width=True):
+    if control_cols[1].button("Top-Deals fokussieren", use_container_width=True):
         st.session_state["only_recommended"] = True
         st.rerun()
 
@@ -1126,7 +1160,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
     shopping_plan = _load_shopping_plan_cached()
     current_products = ProductManager().products
 
-    st.caption("Drücke 'Jetzt scannen', um neue Deals mit potenziellem Gewinn zu finden. Danach entscheide in Sekunden: kaufbar, beobachten oder Risiko.")
+    st.caption("Drücke 'Aktualisieren', um den zuletzt automatisch gescrappten Stand zu sehen, auch wenn dein letzter Aufruf Stunden her ist.")
 
     if not deals.empty and "Datenbasis" in deals.columns:
         real_ratio = float((deals["Datenbasis"] == "Echt").mean() * 100)
@@ -1152,7 +1186,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
     with tabs[0]:
         _render_top_strip(deals, current_products)
         if deals.empty:
-            st.warning("Noch keine Deals vorhanden. Klicke oben auf 'Jetzt scannen'.")
+            st.warning("Noch keine Deals vorhanden. Warte auf den naechsten automatischen Lauf und klicke dann oben auf 'Aktualisieren'.")
         else:
             _render_best_deal_spotlight(deals)
 
@@ -1246,8 +1280,14 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                     st.markdown(f"**Produkt:** {selected_row.get('Produkt', '-')}")
                     st.markdown(f"**Einkauf:** {selected_row.get('Einkauf', '-')} EUR")
                     st.markdown(f"**Ziel-Verkauf:** {selected_row.get('Ziel-Verkauf', '-')} EUR")
+                    st.markdown(f"**Aktiver Marktwert:** {selected_row.get('Aktiver_Marktwert', '-')} EUR")
+                    st.markdown(f"**Amazon Warehouse:** {selected_row.get('Warehouse_Marktwert', '-')} EUR")
+                    st.markdown(f"**Neupreis-Deckel:** {selected_row.get('Neupreis_Deckel', '-')} EUR")
                     st.markdown(f"**Netto-Gewinn:** {selected_row.get('Netto-Gewinn', '-')} EUR")
                     st.markdown(f"**Chance:** {selected_row.get('Chance_Score', '-')} / 100")
+                    st.markdown(f"**Sold/Aktiv Ratio:** {selected_row.get('Verkauft_Aktiv_Ratio', '-')}")
+                    st.markdown(f"**Google Trends Score:** {selected_row.get('Google_Trends_Score', '-')}")
+                    st.markdown(f"**Amazon BSR Score:** {selected_row.get('Amazon_BSR_Score', '-')}")
                     st.markdown(f"**Kapital-Effizienz:** {selected_row.get('Kapital_Effizienz', '-')} ")
                     st.markdown(f"**Vision:** {selected_row.get('Vision_Quelle', '-')} | {selected_row.get('Vision_Analyse', '-')}")
                     st.markdown(f"**Link:** {selected_row.get('Link', '-')} ")
