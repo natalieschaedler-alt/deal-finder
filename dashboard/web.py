@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from database.deal_actions import load_deal_actions, save_deal_action
+from database.live_data_archive import load_snapshots, summarize_snapshots
 from database.manager import ProductManager
 from database.models import Product
 from logic.deal_identity import build_deal_id
@@ -315,6 +316,34 @@ def _render_hero(last_run_summary: str):
     )
 
 
+def _render_data_quality_panel() -> None:
+    rows = load_snapshots(limit=300)
+    summary = summarize_snapshots(rows)
+
+    st.markdown("### Datenqualitaet")
+    if summary["runs"] == 0:
+        st.info("Noch kein Suchverlauf vorhanden. Starte mindestens einen Lauf fuer Live-Statistiken.")
+        return
+
+    q_cols = st.columns(5)
+    with q_cols[0]:
+        _metric_card("Archiv-Laeufe", str(summary["runs"]), "Gespeicherte Suchlaeufe")
+    with q_cols[1]:
+        _metric_card("Angebote", str(summary["total_offers"]), "Im Verlauf gesammelt")
+    with q_cols[2]:
+        _metric_card("Ø Angebote/Lauf", str(summary["avg_offers_per_run"]), "Treffer pro Lauf")
+    with q_cols[3]:
+        _metric_card("Ø Marktvergleiche", str(summary["avg_sold_history_per_run"]), "Sold-History je Lauf")
+    with q_cols[4]:
+        _metric_card("Demo-Anteil", f"{summary['demo_ratio']:.1f}%", "Soll moeglichst niedrig sein")
+
+    platform_counts = summary["platform_counts"]
+    if platform_counts:
+        sorted_platforms = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
+        platform_df = pd.DataFrame(sorted_platforms, columns=["Quelle", "Treffer"])
+        st.dataframe(platform_df, use_container_width=True, hide_index=True)
+
+
 def _save_new_product():
     with st.form("new-product-form", clear_on_submit=True):
         name = st.text_input("Produktname")
@@ -416,6 +445,8 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 st.markdown("- In 'Produkte' kannst du neue Zielprodukte hinzufügen")
                 st.markdown("- In 'Aktivitaeten' siehst du deinen Verlauf")
 
+        _render_data_quality_panel()
+
     with tabs[1]:
         if deals.empty:
             st.info("Noch keine Deals vorhanden.")
@@ -514,6 +545,23 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             st.info("Noch keine Aktionen gespeichert.")
         else:
             st.dataframe(actions_df.sort_values(by="timestamp", ascending=False), use_container_width=True, hide_index=True)
+        st.markdown("### Live-Daten Verlauf")
+        snapshots = load_snapshots(limit=120)
+        if not snapshots:
+            st.info("Noch kein Live-Verlauf vorhanden.")
+        else:
+            runs_df = pd.DataFrame(
+                [
+                    {
+                        "Zeit": row.get("timestamp", ""),
+                        "Produkt": row.get("product", ""),
+                        "Angebote": row.get("offers_count", 0),
+                        "Sold-History": row.get("market_metrics", {}).get("sold_history_count", 0),
+                    }
+                    for row in snapshots
+                ]
+            )
+            st.dataframe(runs_df.sort_values(by="Zeit", ascending=False), use_container_width=True, hide_index=True)
         st.markdown("### App ausprobieren")
         st.markdown("1. Klicke oben auf 'Deals jetzt aktualisieren'.")
         st.markdown("2. Wechsle in den Tab 'Deals'.")
