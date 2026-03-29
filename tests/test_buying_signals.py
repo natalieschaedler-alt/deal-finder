@@ -53,6 +53,33 @@ def test_opportunity_score_rewards_low_price_and_margin():
     assert strong > 55
 
 
+def test_opportunity_score_applies_category_weighting():
+    smartphone_score = calculate_opportunity_score(
+        offer_price=350,
+        product_max_price=450,
+        net_profit=110,
+        roi_percent=32,
+        demand=0.9,
+        risk_penalty=1.0,
+        max_buy_price=410,
+        image_score=6,
+        category="Smartphone",
+    )
+    fashion_score = calculate_opportunity_score(
+        offer_price=350,
+        product_max_price=450,
+        net_profit=110,
+        roi_percent=32,
+        demand=0.9,
+        risk_penalty=1.0,
+        max_buy_price=410,
+        image_score=6,
+        category="Fashion",
+    )
+
+    assert smartphone_score > fashion_score
+
+
 def test_vision_analysis_uses_heuristic_without_api_key():
     result = inspect_listing_images(
         image_urls=[],

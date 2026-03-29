@@ -168,6 +168,7 @@ def run_search_workflow(
                 risk_penalty=risk_penalty,
                 max_buy_price=pricing["max_buy_price"],
                 image_score=image_result.get("score"),
+                category=product.category,
             )
             buy_price_gap = round(pricing["max_buy_price"] - angebot["offer_price"], 2)
             vision_damage_flags = image_result.get("damage_flags", [])
