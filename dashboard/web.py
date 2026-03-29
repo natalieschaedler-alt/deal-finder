@@ -26,6 +26,22 @@ APP_CSS = """
             radial-gradient(circle at top right, rgba(94, 197, 255, 0.28), transparent 24%),
             linear-gradient(180deg, #f6f1e8 0%, #eef3f7 100%);
     }
+    [data-testid="stAppViewContainer"] {
+        background:
+            radial-gradient(circle at top left, rgba(255, 213, 128, 0.35), transparent 28%),
+            radial-gradient(circle at top right, rgba(94, 197, 255, 0.28), transparent 24%),
+            linear-gradient(180deg, #f6f1e8 0%, #eef3f7 100%) !important;
+    }
+    [data-testid="stHeader"] {
+        background: rgba(246, 241, 232, 0.82) !important;
+    }
+    section[data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.92) !important;
+        border-right: 1px solid var(--border-soft);
+    }
+    section[data-testid="stSidebar"] * {
+        color: var(--text-main) !important;
+    }
     .block-container {
         max-width: 1240px;
         padding-top: 2rem;
@@ -130,6 +146,27 @@ APP_CSS = """
         color: var(--text-main);
         border: 1px solid var(--border-soft);
         font-size: 1rem;
+    }
+    div[data-baseweb="popover"] * {
+        color: var(--text-main) !important;
+    }
+    div[data-baseweb="menu"] {
+        background: #ffffff !important;
+        border: 1px solid var(--border-soft) !important;
+    }
+    div[data-baseweb="menu"] li {
+        background: #ffffff !important;
+    }
+    .stAlert {
+        background: rgba(255, 255, 255, 0.93) !important;
+        color: var(--text-main) !important;
+        border: 1px solid var(--border-soft) !important;
+    }
+    code {
+        background: rgba(15, 90, 154, 0.08);
+        color: #0b4678;
+        padding: 0.08rem 0.3rem;
+        border-radius: 6px;
     }
     a {
         color: #0f5a9a !important;
