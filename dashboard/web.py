@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import streamlit as st
 
+from config.manager import ConfigManager
 from database.deal_actions import load_deal_actions, save_deal_action
 from database.live_data_archive import load_snapshots, summarize_snapshots
 from database.manager import ProductManager
@@ -107,6 +108,49 @@ APP_CSS = """
         background: var(--surface-soft);
         border: 1px solid var(--border-soft);
         box-shadow: 0 14px 36px rgba(25, 42, 70, 0.06);
+    }
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 0.85rem;
+        margin: 0.8rem 0 0.25rem;
+    }
+    .status-card {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        padding: 0.95rem 1rem;
+    }
+    .status-title {
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .status-value {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 0.22rem;
+    }
+    .status-note {
+        font-size: 0.92rem;
+        color: var(--text-muted);
+    }
+    .checklist-card {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid var(--border-soft);
+        border-radius: 20px;
+        padding: 1rem 1.1rem;
+    }
+    .checklist-card ol {
+        margin: 0.2rem 0 0;
+        padding-left: 1.2rem;
+    }
+    .checklist-card li {
+        margin-bottom: 0.45rem;
     }
     div[data-testid="stDataFrame"] {
         border: 1px solid var(--border-soft);
@@ -316,6 +360,92 @@ def _render_hero(last_run_summary: str):
     )
 
 
+def _status_card(title: str, value: str, note: str) -> str:
+    return f"""
+    <div class="status-card">
+        <div class="status-title">{title}</div>
+        <div class="status-value">{value}</div>
+        <div class="status-note">{note}</div>
+    </div>
+    """
+
+
+def _render_system_status(config: ConfigManager, products_count: int, deals: pd.DataFrame) -> None:
+    ebay_ready = bool(config.get("ebay_app_id", ""))
+    vision_ready = bool(config.get("vision_api_key", ""))
+    fallback_allowed = bool(config.get("allow_demo_fallback_offers", True))
+    strict_live_mode = bool(config.get("require_real_market_data", False))
+    real_ratio = 0.0
+    if not deals.empty and "Datenbasis" in deals.columns:
+        real_ratio = float((deals["Datenbasis"] == "Echt").mean() * 100)
+
+    st.markdown("### Systemstatus")
+    st.markdown(
+        "<div class='status-grid'>"
+        + _status_card(
+            "Live-Daten",
+            "Aktiv" if ebay_ready else "Nicht verbunden",
+            "eBay API ist die wichtigste echte Datenquelle",
+        )
+        + _status_card(
+            "Vision-Modell",
+            "Aktiv" if vision_ready else "Optional aus",
+            "Schadens- und Bildanalyse wird genauer mit API-Key",
+        )
+        + _status_card(
+            "Fallback-Modus",
+            "Erlaubt" if fallback_allowed else "Aus",
+            "Erlaubt Demo-Treffer falls keine Live-Daten vorliegen",
+        )
+        + _status_card(
+            "Strenger Live-Modus",
+            "An" if strict_live_mode else "Aus",
+            "Nur mit echten Marktvergleichsdaten kaufen",
+        )
+        + _status_card(
+            "Produkte",
+            str(products_count),
+            "Aktive Zielprodukte fuer die Suche",
+        )
+        + _status_card(
+            "Echt-Daten-Quote",
+            f"{real_ratio:.0f}%",
+            "Anteil echter Marktquellen in den aktuellen Deals",
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_setup_guide(config: ConfigManager) -> None:
+    ebay_ready = bool(config.get("ebay_app_id", ""))
+    vision_ready = bool(config.get("vision_api_key", ""))
+    strict_live_mode = bool(config.get("require_real_market_data", False))
+
+    st.markdown("### So nutzt jemand das System sinnvoll")
+    st.markdown(
+        """
+        <div class="checklist-card">
+            <ol>
+                <li>Im Tab <strong>Produkte</strong> Zielprodukte hinterlegen oder anpassen.</li>
+                <li>Oben auf <strong>Deals jetzt aktualisieren</strong> klicken.</li>
+                <li>Im Tab <strong>Uebersicht</strong> die beste Einkaufsliste pruefen.</li>
+                <li>Im Tab <strong>Deals</strong> nur die besten Treffer oeffnen und Aktionen speichern.</li>
+                <li>Im Tab <strong>Aktivitaeten</strong> nachverfolgen, was gekauft, beobachtet oder ignoriert wurde.</li>
+            </ol>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not ebay_ready:
+        st.info("Fuer echte Live-Daten sollte ein eBay App Key in den Streamlit-Secrets hinterlegt werden.")
+    if not vision_ready:
+        st.info("Vision ist optional. Ohne Key nutzt das System weiterhin die lokale Bild-Heuristik.")
+    if strict_live_mode:
+        st.warning("Strenger Live-Modus ist aktiv. Dadurch koennen deutlich weniger Deals erscheinen.")
+
+
 def _render_data_quality_panel() -> None:
     rows = load_snapshots(limit=300)
     summary = summarize_snapshots(rows)
@@ -380,6 +510,7 @@ def _save_new_product():
 def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = "database/deal_actions.json"):
     st.set_page_config(page_title="Deal Finder", page_icon=":moneybag:", layout="wide")
     st.markdown(APP_CSS, unsafe_allow_html=True)
+    config = ConfigManager()
 
     if "last_run_summary" not in st.session_state:
         st.session_state["last_run_summary"] = "Noch kein Lauf gestartet"
@@ -404,6 +535,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
     deals = _ensure_deal_ids(_load_data(csv_path))
     actions_df = _load_actions_dataframe(actions_path)
     shopping_plan = _load_shopping_plan()
+    current_products = ProductManager().products
 
     if not deals.empty and "Datenbasis" in deals.columns:
         real_ratio = float((deals["Datenbasis"] == "Echt").mean() * 100)
@@ -412,9 +544,21 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 "Viele Deals basieren noch auf Fallback-Daten. Fuer echte Marktdaten bitte ebay_app_id setzen."
             )
 
-    tabs = st.tabs(["Uebersicht", "Deals", "Produkte", "Aktivitaeten"])
+    with st.sidebar:
+        st.markdown("## Deal Finder")
+        st.markdown("Diese Seite ist fuer Betreiber und Nutzer gedacht, die schnell profitable Gebrauchtwaren-Deals finden wollen.")
+        st.markdown("### Schnellnavigation")
+        st.markdown("1. Dashboard lesen")
+        st.markdown("2. Deals filtern")
+        st.markdown("3. Produkte pflegen")
+        st.markdown("4. Verlauf kontrollieren")
+        st.markdown("### Tipp")
+        st.markdown("Wenn andere das System nutzen sollen, ist ein eBay API-Key der wichtigste Upgrade-Schritt.")
+
+    tabs = st.tabs(["Dashboard", "Deals", "Produkte", "Aktivitaeten", "Setup & Hilfe"])
 
     with tabs[0]:
+        _render_system_status(config, len(current_products), deals)
         if deals.empty:
             st.warning("Noch keine Deals vorhanden. Klicke oben auf 'Deals jetzt aktualisieren'.")
         else:
@@ -521,7 +665,6 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                     st.dataframe(history, use_container_width=True, hide_index=True)
 
     with tabs[2]:
-        current_products = ProductManager().products
         st.markdown("### Aktuelle Produkte")
         product_frame = pd.DataFrame([
             {
@@ -567,6 +710,38 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
         st.markdown("2. Wechsle in den Tab 'Deals'.")
         st.markdown("3. Wähle einen Deal und speichere eine Aktion.")
         st.markdown("4. Prüfe danach den Tab 'Aktivitaeten' oder die Einkaufsliste in 'Uebersicht'.")
+
+    with tabs[4]:
+        _render_setup_guide(config)
+        st.markdown("### Empfohlene Betriebsmodi")
+        modes = pd.DataFrame(
+            [
+                {
+                    "Modus": "Einfach fuer Nutzer",
+                    "Live-Daten": "Optional",
+                    "Fallback": "An",
+                    "Nutzen": "Es erscheinen stabil Deals, auch ohne API",
+                },
+                {
+                    "Modus": "Qualitaetsmodus",
+                    "Live-Daten": "eBay API aktiv",
+                    "Fallback": "An",
+                    "Nutzen": "Gute Mischung aus vielen Deals und echten Marktsignalen",
+                },
+                {
+                    "Modus": "Strenger Live-Modus",
+                    "Live-Daten": "Pflicht",
+                    "Fallback": "Aus oder ignoriert",
+                    "Nutzen": "Nur harte, echte Marktvergleiche zaehlen",
+                },
+            ]
+        )
+        st.dataframe(modes, use_container_width=True, hide_index=True)
+        st.markdown("### Was verbessert den Nutzen fuer andere am meisten?")
+        st.markdown("1. Klare Produktliste mit realistischen Preisgrenzen")
+        st.markdown("2. eBay API-Key fuer echte Live-Daten")
+        st.markdown("3. Regelmaessiger Suchlauf und gepflegter Aktivitaetsverlauf")
+        st.markdown("4. Einfache Kaufregeln statt zu strenger Filter")
 
 
 if __name__ == "__main__":
