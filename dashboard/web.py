@@ -189,6 +189,15 @@ APP_CSS = """
         padding: 1rem;
         box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
     }
+    .top-deal-hero {
+        padding: 1.8rem;
+        border-radius: 30px;
+        border: 1px solid rgba(53, 208, 127, 0.25);
+        background:
+            radial-gradient(circle at top right, rgba(53, 208, 127, 0.12), transparent 42%),
+            linear-gradient(180deg, rgba(20, 29, 40, 0.98) 0%, rgba(12, 18, 26, 0.99) 100%);
+        box-shadow: 0 24px 54px rgba(0, 0, 0, 0.33);
+    }
     .deal-image-slot {
         width: 100%;
         height: 180px;
@@ -263,6 +272,10 @@ APP_CSS = """
         text-transform: uppercase;
         color: var(--text-muted);
         margin-bottom: 0.3rem;
+    }
+    .metric-help {
+        border-bottom: 1px dashed rgba(148, 163, 184, 0.6);
+        cursor: help;
     }
     .deal-metric-value {
         font-size: 1.08rem;
@@ -679,13 +692,13 @@ def _render_best_deal_spotlight(deals: pd.DataFrame) -> None:
     st.markdown("### Bester Deal jetzt")
     st.markdown(
         f"""
-        <div class="deal-card" style="padding:1.35rem;border-radius:28px;">
+        <div class="deal-card top-deal-hero">
             <div class="deal-top">
                 <div>
                     <div class="deal-title">{row.get('Produkt', '-')}</div>
                     <div class="deal-subtitle">{_platform_label(row)} · Sehr starke Chance im aktuellen Feed</div>
                 </div>
-                <div class="score-pill {_score_class(score)}">Score {score:.0f}/100</div>
+                <div class="score-pill {_score_class(score)}" title="Score kombiniert Gewinnpotenzial, Nachfrage, Zustand und Marktfit.">Score {score:.0f}/100</div>
             </div>
             {_deal_image_html(row)}
             <div class="deal-metrics">
@@ -697,7 +710,7 @@ def _render_best_deal_spotlight(deals: pd.DataFrame) -> None:
             <div class="deal-insights">
                 <span class="signal-pill {signal_class}">{signal}</span>
                 <span class="insight-chip">{_speed_label(row)}</span>
-                <span class="insight-chip">{_safety_label(row)}</span>
+                <span class="insight-chip" title="Risiko bewertet Datenqualitaet, Anbieter-Signale und Unsicherheiten im Angebot.">{_safety_label(row)}</span>
                 <span class="insight-chip">{_seller_label(row)}</span>
             </div>
         </div>
@@ -784,13 +797,13 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
                         <div class="deal-title">{row.get('Produkt', '-')}</div>
                         <div class="deal-subtitle">{platform} · {row.get('Zustand', row.get('Vision_Quelle', 'Marktplatz'))}</div>
                     </div>
-                    <div class="score-pill {score_class}">{_score_label(score)} · {score:.0f}/100</div>
+                    <div class="score-pill {score_class}" title="Score kombiniert Gewinnpotenzial, Nachfrage, Zustand und Marktfit.">{_score_label(score)} · {score:.0f}/100</div>
                 </div>
                 {_deal_image_html(row)}
                 <div class="deal-metrics">
                     <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
                     <div class="deal-metric"><div class="deal-metric-label">Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
-                    <div class="deal-metric"><div class="deal-metric-label">Score</div><div class="deal-metric-value">{score:.0f}/100</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label"><span class="metric-help" title="Score kombiniert Gewinnpotenzial, Nachfrage, Zustand und Marktfit.">Score</span></div><div class="deal-metric-value">{score:.0f}/100</div></div>
                 </div>
                 {_score_breakdown_html(row)}
                 <div class="deal-metrics">
@@ -801,7 +814,7 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
                 <div class="deal-insights">
                     <span class="signal-pill {signal_class}">{signal}</span>
                     <span class="signal-pill {speed_class}">{speed}</span>
-                    <span class="insight-chip">{_safety_label(row)}</span>
+                    <span class="insight-chip" title="Risiko bewertet Datenqualitaet, Anbieter-Signale und Unsicherheiten im Angebot.">{_safety_label(row)}</span>
                     <span class="insight-chip">{_seller_label(row)}</span>
                 </div>
                 <div style="margin-top:0.8rem;">
@@ -1180,9 +1193,9 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
 
             with layout_cols[1]:
                 _render_deal_cards(filtered)
-                st.markdown("### Tabellenansicht")
                 readable = _build_deals_readable_table(filtered)
-                st.dataframe(readable, use_container_width=True, hide_index=True)
+                with st.expander("Tabellenansicht", expanded=False):
+                    st.dataframe(readable, use_container_width=True, hide_index=True)
             if filtered.empty:
                 pass
             else:
