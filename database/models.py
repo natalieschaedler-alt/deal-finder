@@ -48,3 +48,6 @@ class Deal:
     budget_priority: Optional[int] = None
     recommended_purchase: bool = False
     deal_id: str = ""
+    source_platform: str = ""
+    primary_image_url: str = ""
+    seller_score: Optional[float] = None

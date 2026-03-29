@@ -189,6 +189,29 @@ APP_CSS = """
         padding: 1rem;
         box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
     }
+    .deal-image-slot {
+        width: 100%;
+        height: 180px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(53, 208, 127, 0.08) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(244, 200, 79, 0.06) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0.9rem 0 0.4rem;
+    }
+    .deal-image-slot img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .deal-image-placeholder {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
     .deal-top {
         display: flex;
         justify-content: space-between;
@@ -259,6 +282,27 @@ APP_CSS = """
         color: #8ebfff;
         font-size: 0.84rem;
         border: 1px solid rgba(104, 167, 255, 0.18);
+    }
+    .score-breakdown {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.55rem;
+        margin: 0.6rem 0 0.9rem;
+    }
+    .score-part {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 0.7rem;
+    }
+    .score-part strong {
+        display: block;
+        color: var(--text-main);
+        font-size: 0.9rem;
+    }
+    .score-part span {
+        color: var(--text-muted);
+        font-size: 0.8rem;
     }
     .premium-panel {
         background: linear-gradient(135deg, rgba(53, 208, 127, 0.08) 0%, rgba(104, 167, 255, 0.08) 100%), var(--surface-card);
@@ -473,6 +517,11 @@ def _platform_from_link(link: str) -> str:
     return "Marketplace"
 
 
+def _platform_label(row: pd.Series) -> str:
+    explicit = str(row.get("Plattform", "") or "").strip()
+    return explicit if explicit else _platform_from_link(str(row.get("Link", "")))
+
+
 def _speed_label(row: pd.Series) -> str:
     sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
     score = float(row.get("Chance_Score", 0) or 0)
@@ -486,11 +535,76 @@ def _speed_label(row: pd.Series) -> str:
 def _safety_label(row: pd.Series) -> str:
     quality = str(row.get("Datenbasis", "Fallback"))
     risk = str(row.get("Risiko", "")).lower()
+    seller_score = float(row.get("Verkäufer_Score", row.get("seller_score", 0)) or 0)
+    if seller_score >= 80:
+        return "Verkäufer sicher"
     if quality == "Echt" and "ok" in risk:
         return "niedriges Risiko"
     if quality == "Echt":
         return "Risiko prüfen"
     return "Demo-Daten"
+
+
+def _seller_label(row: pd.Series) -> str:
+    seller_score = float(row.get("Verkäufer_Score", row.get("seller_score", 0)) or 0)
+    if seller_score >= 80:
+        return f"Verkäufer sicher ({seller_score:.0f})"
+    if seller_score >= 60:
+        return f"Verkäufer mittel ({seller_score:.0f})"
+    return f"Verkäufer Risiko ({seller_score:.0f})"
+
+
+def _score_breakdown_html(row: pd.Series) -> str:
+    price_gap = float(row.get("Kaufpuffer", row.get("buy_price_gap", 0)) or 0)
+    sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
+    vision = str(row.get("Vision_Analyse", "") or "")
+    demand_text = "hohe Nachfrage" if sold_count >= 5 else "solide Nachfrage" if sold_count >= 2 else "unsichere Nachfrage"
+    image_text = "Bildprüfung positiv" if vision and vision.lower() not in {"-", "", "bildanalyse deaktiviert"} else "Bildprüfung neutral"
+    return f"""
+    <div class="score-breakdown">
+        <div class="score-part"><strong>Preis</strong><span>{price_gap:.0f} EUR Puffer zum Max-Kaufpreis</span></div>
+        <div class="score-part"><strong>Nachfrage</strong><span>{demand_text}</span></div>
+        <div class="score-part"><strong>Zustand</strong><span>{image_text}</span></div>
+    </div>
+    """
+
+
+def _deal_image_html(row: pd.Series) -> str:
+    image_url = str(row.get("Bild_URL", row.get("primary_image_url", "")) or "").strip()
+    if image_url:
+        return f'<div class="deal-image-slot"><img src="{image_url}" alt="{row.get("Produkt", "Deal")}"></div>'
+    return '<div class="deal-image-slot"><div class="deal-image-placeholder">Kein Produktbild verfügbar</div></div>'
+
+
+def _render_arbitrage_panel(deals: pd.DataFrame) -> None:
+    st.markdown("### Multi-Plattform-Arbitrage")
+    if deals.empty:
+        st.info("Noch keine Plattformvergleiche vorhanden.")
+        return
+
+    working = deals.copy()
+    working["Plattform"] = working.apply(_platform_label, axis=1)
+    working["Einkauf"] = _safe_float_series(working, "Einkauf")
+    working["Ziel-Verkauf"] = _safe_float_series(working, "Ziel-Verkauf")
+    working["Netto-Gewinn"] = _safe_float_series(working, "Netto-Gewinn")
+
+    rows = []
+    for product, frame in working.groupby("Produkt"):
+        cheapest = frame.sort_values(by="Einkauf", ascending=True).iloc[0]
+        highest_market = frame.sort_values(by="Ziel-Verkauf", ascending=False).iloc[0]
+        rows.append(
+            {
+                "Produkt": product,
+                "Günstigste Quelle": cheapest["Plattform"],
+                "Bester Markt": highest_market["Plattform"],
+                "Kauf": _format_currency(cheapest["Einkauf"]),
+                "Markt": _format_currency(highest_market["Ziel-Verkauf"]),
+                "Netto-Gewinn": f"+{float(cheapest['Netto-Gewinn']):.0f} EUR",
+            }
+        )
+
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def _category_for_product(products: list[Product]) -> dict:
@@ -549,19 +663,22 @@ def _render_best_deal_spotlight(deals: pd.DataFrame) -> None:
             <div class="deal-top">
                 <div>
                     <div class="deal-title">{row.get('Produkt', '-')}</div>
-                    <div class="deal-subtitle">{_platform_from_link(row.get('Link', ''))} · Sehr starke Chance im aktuellen Feed</div>
+                    <div class="deal-subtitle">{_platform_label(row)} · Sehr starke Chance im aktuellen Feed</div>
                 </div>
                 <div class="score-pill {_score_class(score)}">Score {score:.0f}/100</div>
             </div>
+            {_deal_image_html(row)}
             <div class="deal-metrics">
                 <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
                 <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
                 <div class="deal-metric"><div class="deal-metric-label">Netto-Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
             </div>
+            {_score_breakdown_html(row)}
             <div class="deal-insights">
                 <span class="signal-pill {signal_class}">{signal}</span>
                 <span class="insight-chip">{_speed_label(row)}</span>
                 <span class="insight-chip">{_safety_label(row)}</span>
+                <span class="insight-chip">{_seller_label(row)}</span>
             </div>
         </div>
         """,
@@ -636,7 +753,7 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
         signal = _signal_label(row)
         score_class = _score_class(score)
         signal_class = _signal_class(str(row.get("Aktion", signal)).upper())
-        platform = _platform_from_link(str(row.get("Link", "")))
+        platform = _platform_label(row)
         speed = _speed_label(row)
         speed_class = "signal-buy" if speed == "schnell" else "signal-watch" if speed == "mittel" else "signal-risk"
         card_rows.append(
@@ -649,24 +766,23 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
                     </div>
                     <div class="score-pill {score_class}">{_score_label(score)} · {score:.0f}/100</div>
                 </div>
-                <div class="deal-metric" style="margin-top:0.85rem; margin-bottom:0.2rem;">
-                    <div class="deal-metric-label">Bild</div>
-                    <div class="deal-metric-value">Listing Vorschau</div>
-                </div>
+                {_deal_image_html(row)}
                 <div class="deal-metrics">
                     <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
                     <div class="deal-metric"><div class="deal-metric-label">Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
                     <div class="deal-metric"><div class="deal-metric-label">Score</div><div class="deal-metric-value">{score:.0f}/100</div></div>
                 </div>
+                {_score_breakdown_html(row)}
                 <div class="deal-metrics">
                     <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
                     <div class="deal-metric"><div class="deal-metric-label">Geschwindigkeit</div><div class="deal-metric-value">{speed}</div></div>
-                    <div class="deal-metric"><div class="deal-metric-label">Risiko</div><div class="deal-metric-value">{_safety_label(row)}</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Verkäufer</div><div class="deal-metric-value">{_seller_label(row)}</div></div>
                 </div>
                 <div class="deal-insights">
                     <span class="signal-pill {signal_class}">{signal}</span>
                     <span class="signal-pill {speed_class}">{speed}</span>
                     <span class="insight-chip">{_safety_label(row)}</span>
+                    <span class="insight-chip">{_seller_label(row)}</span>
                 </div>
                 <div style="margin-top:0.8rem;">
                     <a href="{row.get('Link', '#')}" target="_blank" style="display:inline-block;padding:0.7rem 0.95rem;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);text-decoration:none;">Angebot öffnen</a>
@@ -698,11 +814,13 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
 
     visible_cols = [
         "Produkt",
+        "Plattform",
         "Einkauf",
         "Ziel-Verkauf",
         "Netto-Gewinn",
         "ROI_%",
         "Chance_Score",
+        "Verkäufer_Score",
         "Aktion",
         "Empfohlener_Kauf",
         "Kapital_Effizienz",
@@ -715,6 +833,7 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
     rename_map = {
         "ROI_%": "ROI %",
         "Chance_Score": "Chance",
+        "Verkäufer_Score": "Verkäufer",
         "Empfohlener_Kauf": "Plan",
         "Kapital_Effizienz": "Effizienz",
         "Vision_Analyse": "Vision",
@@ -990,6 +1109,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 st.markdown("- Geschwindigkeit direkt sichtbar")
 
         _render_market_analysis(deals, current_products)
+        _render_arbitrage_panel(deals)
         _render_data_quality_panel()
         _render_system_status(config, len(current_products), deals)
 

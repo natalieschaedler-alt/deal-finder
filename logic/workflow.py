@@ -158,6 +158,7 @@ def run_search_workflow(
             sold_source_summary = "eBay" if effective_history else ""
             risk_penalty = sum(risk_factors.values()) if risk_factors else 0
             capital_efficiency = round((net_profit / angebot["offer_price"]), 3) if angebot["offer_price"] > 0 else 0
+            seller_score = max(0.0, min(100.0, float(angebot.get("seller_rating", 5)) * 20.0 - risk_penalty * 25.0))
             opportunity_score = calculate_opportunity_score(
                 offer_price=angebot["offer_price"],
                 product_max_price=product.max_price,
@@ -214,6 +215,9 @@ def run_search_workflow(
                 buy_price_gap=buy_price_gap,
                 capital_efficiency=capital_efficiency,
                 deal_id=build_deal_id(product.name, angebot["offer_title"], angebot["offer_url"]),
+                source_platform=str(angebot.get("source_platform", "")),
+                primary_image_url=(angebot.get("image_urls", [""])[0] if angebot.get("image_urls") else ""),
+                seller_score=round(seller_score, 1),
             )
             if deal.buy_decision == "KAUFEN":
                 all_deals.append(deal)
