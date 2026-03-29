@@ -477,20 +477,20 @@ def _speed_label(row: pd.Series) -> str:
     sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
     score = float(row.get("Chance_Score", 0) or 0)
     if sold_count >= 5 or score >= 90:
-        return "Verkauf schnell"
+        return "schnell"
     if sold_count >= 2 or score >= 70:
-        return "Verkauf solide"
-    return "Verkauf langsam"
+        return "mittel"
+    return "langsam"
 
 
 def _safety_label(row: pd.Series) -> str:
     quality = str(row.get("Datenbasis", "Fallback"))
     risk = str(row.get("Risiko", "")).lower()
     if quality == "Echt" and "ok" in risk:
-        return "Verkaeufer sicher"
+        return "niedriges Risiko"
     if quality == "Echt":
-        return "Risiko pruefen"
-    return "Nur Fallback-Daten"
+        return "Risiko prüfen"
+    return "Demo-Daten"
 
 
 def _category_for_product(products: list[Product]) -> dict:
@@ -514,19 +514,61 @@ def _render_top_strip(deals: pd.DataFrame, products: list[Product]) -> None:
             best_category = str(category_summary.index[0])
 
     top_deals = int((working["Chance_Score"] >= 90).sum())
-    total_profit = working["Netto-Gewinn"].sum()
+    total_profit = working["Netto-Gewinn"].max()
+    best_score = int(working["Chance_Score"].max()) if not working.empty else 0
 
     st.markdown(
         f"""
-        <div class="top-strip">
-            <div class="metric-card"><div class="metric-label">Deals heute</div><div class="metric-value">{len(working)}</div><div class="metric-sub">Aktive Chancen im Feed</div></div>
-            <div class="metric-card"><div class="metric-label">Gewinnpotenzial</div><div class="metric-value">{_format_currency(total_profit)}</div><div class="metric-sub">Summierter Netto-Gewinn</div></div>
-            <div class="metric-card"><div class="metric-label">Beste Kategorie</div><div class="metric-value">{best_category}</div><div class="metric-sub">Derzeit staerkste Nische</div></div>
-            <div class="metric-card"><div class="metric-label">Neue Top Deals</div><div class="metric-value">{top_deals}</div><div class="metric-sub">Score 90 oder hoeher</div></div>
+        <div class="top-strip" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+            <div class="metric-card"><div class="metric-label">Realistisch erzielbarer Gewinn heute</div><div class="metric-value">+{float(total_profit):.0f} EUR</div><div class="metric-sub">Staerkster Deal im Feed</div></div>
+            <div class="metric-card"><div class="metric-label">Aktuell kaufbereit</div><div class="metric-value">{top_deals} Top Deal{'s' if top_deals != 1 else ''}</div><div class="metric-sub">Mit sehr starkem Score</div></div>
+            <div class="metric-card"><div class="metric-label">Bester Deal Score</div><div class="metric-value">{best_score} / 100</div><div class="metric-sub">Direkte Entscheidungshilfe</div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def _render_best_deal_spotlight(deals: pd.DataFrame) -> None:
+    if deals.empty:
+        return
+
+    working = deals.copy()
+    working["Chance_Score"] = _safe_float_series(working, "Chance_Score")
+    working["Netto-Gewinn"] = _safe_float_series(working, "Netto-Gewinn")
+    working = working.sort_values(by=["Chance_Score", "Netto-Gewinn"], ascending=False)
+    row = working.iloc[0]
+    score = float(row.get("Chance_Score", 0) or 0)
+    signal = _signal_label(row)
+    signal_class = _signal_class(str(row.get("Aktion", signal)).upper())
+
+    st.markdown("### Bester Deal jetzt")
+    st.markdown(
+        f"""
+        <div class="deal-card" style="padding:1.35rem;border-radius:28px;">
+            <div class="deal-top">
+                <div>
+                    <div class="deal-title">{row.get('Produkt', '-')}</div>
+                    <div class="deal-subtitle">{_platform_from_link(row.get('Link', ''))} · Sehr starke Chance im aktuellen Feed</div>
+                </div>
+                <div class="score-pill {_score_class(score)}">Score {score:.0f}/100</div>
+            </div>
+            <div class="deal-metrics">
+                <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
+                <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
+                <div class="deal-metric"><div class="deal-metric-label">Netto-Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
+            </div>
+            <div class="deal-insights">
+                <span class="signal-pill {signal_class}">{signal}</span>
+                <span class="insight-chip">{_speed_label(row)}</span>
+                <span class="insight-chip">{_safety_label(row)}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if str(row.get("Link", "")).strip():
+        st.link_button("Angebot öffnen", str(row.get("Link", "")), use_container_width=True)
 
 
 def _render_alert_banner(deals: pd.DataFrame) -> None:
@@ -595,6 +637,8 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
         score_class = _score_class(score)
         signal_class = _signal_class(str(row.get("Aktion", signal)).upper())
         platform = _platform_from_link(str(row.get("Link", "")))
+        speed = _speed_label(row)
+        speed_class = "signal-buy" if speed == "schnell" else "signal-watch" if speed == "mittel" else "signal-risk"
         card_rows.append(
             f"""
             <div class="deal-card">
@@ -605,16 +649,27 @@ def _render_deal_cards(filtered: pd.DataFrame) -> None:
                     </div>
                     <div class="score-pill {score_class}">{_score_label(score)} · {score:.0f}/100</div>
                 </div>
+                <div class="deal-metric" style="margin-top:0.85rem; margin-bottom:0.2rem;">
+                    <div class="deal-metric-label">Bild</div>
+                    <div class="deal-metric-value">Listing Vorschau</div>
+                </div>
                 <div class="deal-metrics">
                     <div class="deal-metric"><div class="deal-metric-label">Kaufpreis</div><div class="deal-metric-value">{_format_currency(row.get('Einkauf', 0))}</div></div>
-                    <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
                     <div class="deal-metric"><div class="deal-metric-label">Gewinn</div><div class="deal-metric-value">+{float(row.get('Netto-Gewinn', 0) or 0):.0f} EUR</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Score</div><div class="deal-metric-value">{score:.0f}/100</div></div>
+                </div>
+                <div class="deal-metrics">
+                    <div class="deal-metric"><div class="deal-metric-label">Marktpreis</div><div class="deal-metric-value">{_format_currency(row.get('Ziel-Verkauf', 0))}</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Geschwindigkeit</div><div class="deal-metric-value">{speed}</div></div>
+                    <div class="deal-metric"><div class="deal-metric-label">Risiko</div><div class="deal-metric-value">{_safety_label(row)}</div></div>
                 </div>
                 <div class="deal-insights">
                     <span class="signal-pill {signal_class}">{signal}</span>
+                    <span class="signal-pill {speed_class}">{speed}</span>
                     <span class="insight-chip">{_safety_label(row)}</span>
-                    <span class="insight-chip">{_speed_label(row)}</span>
-                    <span class="insight-chip">ROI {float(row.get('ROI_%', 0) or 0):.0f}%</span>
+                </div>
+                <div style="margin-top:0.8rem;">
+                    <a href="{row.get('Link', '#')}" target="_blank" style="display:inline-block;padding:0.7rem 0.95rem;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);text-decoration:none;">Angebot öffnen</a>
                 </div>
             </div>
             """
@@ -699,14 +754,14 @@ def _render_hero(last_run_summary: str):
             <div class="hero-grid">
                 <div>
                     <div class="eyebrow">Deal Intelligence</div>
-                    <h1>Finde profitable Deals schneller als andere.</h1>
-                    <p>Der Feed wirkt jetzt wie ein echtes Geld-Tool: klare Signale, harte Scores, dunkles Premium-Design und ein schneller Blick auf Gewinn, Risiko und Tempo.</p>
+                    <h1>Finde profitable Deals bevor andere reagieren.</h1>
+                    <p>Live bewertet nach Gewinn, Risiko und Verkaufsgeschwindigkeit.</p>
                     <p><strong>Letzter Lauf:</strong> {last_run_summary}</p>
                 </div>
                 <div class="hero-stat">
-                    <div class="metric-label">Was Nutzer sofort verstehen sollen</div>
-                    <div class="metric-value">Hier verdient man Geld.</div>
-                    <div class="metric-sub">Nicht Datenbank, sondern Entscheidungsmaschine fuer Kauf, Beobachtung und Timing.</div>
+                    <div class="metric-label">Status</div>
+                    <div class="metric-value">Live bereit</div>
+                    <div class="metric-sub">Scan starten, staerksten Deal sehen, schneller handeln.</div>
                 </div>
             </div>
         </div>
@@ -738,24 +793,24 @@ def _render_system_status(config: ConfigManager, products_count: int, deals: pd.
     st.markdown(
         "<div class='status-grid'>"
         + _status_card(
-            "Live-Daten",
-            "Aktiv" if ebay_ready else "Nicht verbunden",
-            "eBay API ist die wichtigste echte Datenquelle",
+            "Live-Marktdaten",
+            "eBay verbunden" if ebay_ready else "Nicht verbunden",
+            "Echte Preissignale aus einer Live-Quelle",
         )
         + _status_card(
-            "Vision-Modell",
-            "Aktiv" if vision_ready else "Optional aus",
-            "Schadens- und Bildanalyse wird genauer mit API-Key",
+            "Bildprüfung",
+            "Aktivierbar" if vision_ready else "Optional",
+            "Bilder koennen zusaetzlich geprueft werden",
         )
         + _status_card(
-            "Fallback-Modus",
-            "Erlaubt" if fallback_allowed else "Aus",
-            "Erlaubt Demo-Treffer falls keine Live-Daten vorliegen",
+            "Demo-Daten",
+            "Aktiv" if fallback_allowed else "Aus",
+            "Zeigt weiterhin Chancen wenn Live-Daten fehlen",
         )
         + _status_card(
-            "Strenger Live-Modus",
-            "An" if strict_live_mode else "Aus",
-            "Nur mit echten Marktvergleichsdaten kaufen",
+            "Echte Verkäufe geprüft",
+            "Streng" if strict_live_mode else "Flexibel",
+            "Bestimmt wie hart nur echte Marktvergleiche zaehlen",
         )
         + _status_card(
             "Produkte",
@@ -915,39 +970,28 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
 
     with tabs[0]:
         _render_top_strip(deals, current_products)
-        _render_system_status(config, len(current_products), deals)
         if deals.empty:
             st.warning("Noch keine Deals vorhanden. Klicke oben auf 'Jetzt scannen'.")
         else:
-            metric_cols = st.columns(5)
-            with metric_cols[0]:
-                _metric_card("Deals", str(len(deals)), "Aktuell geladene Kaufkandidaten")
-            with metric_cols[1]:
-                _metric_card("Durchschnitt Netto", f"{_safe_float_series(deals, 'Netto-Gewinn').mean():.2f} EUR", "Pro angezeigtem Deal")
-            with metric_cols[2]:
-                _metric_card("Kapitalbedarf", f"{_safe_float_series(deals, 'Einkauf').sum():.2f} EUR", "Wenn du alles kaufen würdest")
-            with metric_cols[3]:
-                real_ratio = ((deals.get("Datenbasis", pd.Series(dtype=str)) == "Echt").mean() * 100) if not deals.empty else 0
-                _metric_card("Echt-Daten", f"{real_ratio:.0f}%", "Live-Marktquellen statt Fallback")
-            with metric_cols[4]:
-                _metric_card("Historische Sales", str(int(_safe_float_series(deals, 'Verkauft_Anzahl').sum())), "Vergleichsverkäufe in den Daten")
+            _render_best_deal_spotlight(deals)
 
             plan_left, plan_right = st.columns([1.2, 1])
             with plan_left:
-                st.markdown("### Beste Einkaufsliste")
+                st.markdown("### Kaufbare Deals")
                 if shopping_plan.empty:
-                    st.info("Noch keine Einkaufsliste vorhanden. Starte zuerst den One-Click-Lauf.")
+                    st.info("Noch keine priorisierte Einkaufsliste vorhanden. Starte zuerst den Scan.")
                 else:
                     st.dataframe(shopping_plan, use_container_width=True, hide_index=True)
             with plan_right:
-                st.markdown("### Schnellstart")
-                st.markdown("- Jetzt scannen startet Suche, Bewertung und Budgetplan")
-                st.markdown("- Deal-Karten zeigen sofort Gewinn, Score und Signal")
-                st.markdown("- Produkte-Tab verwaltet deine Zielobjekte")
-                st.markdown("- Aktivitaeten zeigen die Nutzung im Alltag")
+                st.markdown("### Entscheidung zuerst")
+                st.markdown("- Kaufbar")
+                st.markdown("- Beobachten")
+                st.markdown("- Risiko")
+                st.markdown("- Geschwindigkeit direkt sichtbar")
 
         _render_market_analysis(deals, current_products)
         _render_data_quality_panel()
+        _render_system_status(config, len(current_products), deals)
 
     with tabs[1]:
         if deals.empty:
@@ -957,28 +1001,31 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             layout_cols = st.columns([0.34, 0.66])
             with layout_cols[0]:
                 st.markdown("### Filter")
+                products = sorted([value for value in deals.get("Produkt", pd.Series(dtype=str)).dropna().unique().tolist()])
+                selected_product = st.selectbox("Kategorie", options=["Alle"] + products)
                 min_netto = st.number_input("Mindestgewinn", value=0.0, step=10.0)
-                max_price = st.number_input("Maximaler Einkauf", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
-                min_score = st.slider("Deal Score", min_value=0, max_value=100, value=50, step=5)
-                only_buy = st.checkbox("Nur KAUFEN", value=True)
+                max_price = st.number_input("Preisbereich", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
+                platform_options = ["Alle", "eBay", "Kleinanzeigen", "Facebook", "Vinted", "Willhaben", "Shpock", "Marketplace"]
+                selected_platform = st.selectbox("Plattform", options=platform_options)
+                only_buy = st.checkbox("Nur kaufbar", value=True)
                 only_recommended = st.checkbox("Nur Top-Angebote", value=st.session_state.get("only_recommended", False))
                 st.session_state["only_recommended"] = only_recommended
-                products = sorted([value for value in deals.get("Produkt", pd.Series(dtype=str)).dropna().unique().tolist()])
-                selected_product = st.selectbox("Kategorie / Produkt", options=["Alle"] + products)
 
             filtered = deals.copy()
             filtered["Netto-Gewinn"] = _safe_float_series(filtered, "Netto-Gewinn")
             filtered["Einkauf"] = _safe_float_series(filtered, "Einkauf")
             filtered["Chance_Score"] = _safe_float_series(filtered, "Chance_Score")
+            filtered["Plattform"] = filtered.get("Link", pd.Series(dtype=str)).apply(_platform_from_link)
             filtered = filtered[filtered["Netto-Gewinn"] >= min_netto]
             filtered = filtered[filtered["Einkauf"] <= max_price]
-            filtered = filtered[filtered["Chance_Score"] >= min_score]
             if only_buy and "Aktion" in filtered.columns:
                 filtered = filtered[filtered["Aktion"] == "KAUFEN"]
             if only_recommended and "Empfohlener_Kauf" in filtered.columns:
                 filtered = filtered[filtered["Empfohlener_Kauf"] == "ja"]
             if selected_product != "Alle":
                 filtered = filtered[filtered["Produkt"] == selected_product]
+            if selected_platform != "Alle":
+                filtered = filtered[filtered["Plattform"] == selected_platform]
 
             with layout_cols[1]:
                 _render_deal_cards(filtered)
