@@ -56,3 +56,9 @@ class Deal:
     risk_score: Optional[float] = None
     listing_age_days: Optional[float] = None
     action_color: str = "gelb"
+    active_market_price: Optional[float] = None
+    warehouse_market_price: Optional[float] = None
+    new_price_ceiling: Optional[float] = None
+    sold_active_ratio: Optional[float] = None
+    google_trends_score: Optional[float] = None
+    amazon_bsr_score: Optional[float] = None

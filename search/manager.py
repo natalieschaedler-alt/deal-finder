@@ -5,9 +5,11 @@ import time
 from config.manager import ConfigManager
 from database.models import Product, Deal
 from search.kleinanzeigen import KleinanzeigenSearch
+from search.amazon_warehouse import AmazonWarehouseSearch
 from search.ebay import EbaySearch
 from search.willhaben import WillhabenSearch
 from search.facebook import FacebookMarketplaceSearch
+from search.reference_prices import ReferencePriceSearch
 from search.shpock import ShpockSearch
 from search.vinted import VintedSearch
 from search.landleanzeiger import LandleanzeigerSearch
@@ -23,6 +25,10 @@ class SearchManager:
             ShpockSearch(),
             VintedSearch(),
             LandleanzeigerSearch()
+        ]
+        self.market_sources = [
+            AmazonWarehouseSearch(),
+            ReferencePriceSearch(),
         ]
 
     def search_all(self, product: Product) -> List[Deal]:
@@ -67,4 +73,30 @@ class SearchManager:
 
             history = metrics.get("sold_history", [])
             merged["sold_history"].extend(history)
+        return merged
+
+    def get_external_market_context(self, product: Product) -> dict:
+        merged = {
+            "warehouse_prices": [],
+            "condition_labels": [],
+            "idealo_prices": [],
+            "geizhals_prices": [],
+            "new_price_ceiling": None,
+        }
+        for source in self.market_sources:
+            try:
+                context = source.get_market_context(product)
+            except Exception:
+                continue
+
+            merged["warehouse_prices"].extend(context.get("warehouse_prices", []))
+            merged["condition_labels"].extend(context.get("condition_labels", []))
+            merged["idealo_prices"].extend(context.get("idealo_prices", []))
+            merged["geizhals_prices"].extend(context.get("geizhals_prices", []))
+
+            if context.get("new_price_ceiling") is not None:
+                if merged["new_price_ceiling"] is None:
+                    merged["new_price_ceiling"] = context["new_price_ceiling"]
+                else:
+                    merged["new_price_ceiling"] = min(merged["new_price_ceiling"], context["new_price_ceiling"])
         return merged

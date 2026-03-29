@@ -15,6 +15,7 @@ def run_search_workflow(
     from logic.risk import estimate_risk
     from logic.advanced_evaluate import advanced_evaluate_deal
     from logic.deal_intelligence import compute_deal_intelligence
+    from logic.market_intelligence import aggregate_market_context
     from logic.product_discovery import discover_best_products
     from logic.market_pricing import build_trade_plan, normalize_condition
     from logic.vision_analysis import inspect_listing_images
@@ -67,6 +68,11 @@ def run_search_workflow(
             if hasattr(search_manager, "get_market_metrics")
             else {"sold_prices": [], "sold_by_condition": {}, "sold_history": []}
         )
+        external_market_context = (
+            search_manager.get_external_market_context(product)
+            if hasattr(search_manager, "get_external_market_context")
+            else {"warehouse_prices": [], "idealo_prices": [], "geizhals_prices": [], "new_price_ceiling": None}
+        )
         sold_prices_global = market_metrics.get("sold_prices", [])
         sold_by_condition = market_metrics.get("sold_by_condition", {})
         sold_history_global = market_metrics.get("sold_history", [])
@@ -104,18 +110,6 @@ def run_search_workflow(
                 logger.warning("Live-Daten Archiv konnte nicht geschrieben werden: %s", exc)
 
         for angebot in offers:
-            demand = estimate_demand(product.name)
-            risk_factors = estimate_risk(angebot)
-            eval_result = advanced_evaluate_deal(
-                product,
-                angebot["offer_price"],
-                angebot["resale_price"],
-                angebot["condition"],
-                angebot["accessories"],
-                angebot["location"],
-                demand,
-                risk_factors,
-            )
             cond_key = normalize_condition(angebot.get("condition", "")).lower()
             sold_prices_condition = sold_by_condition.get(cond_key, [])
             has_live_market_data = bool(sold_prices_condition or sold_prices_global)
@@ -142,6 +136,32 @@ def run_search_workflow(
                 if normalize_condition(history_item.get("condition", "")).lower() == cond_key
             ]
             effective_history = sold_history_condition or sold_history_global
+            market_context = aggregate_market_context(
+                product_name=product.name,
+                category=product.category,
+                sold_prices=sold_prices_condition or sold_prices_global,
+                active_offer_prices=[offer.get("offer_price", 0) for offer in offers],
+                warehouse_prices=external_market_context.get("warehouse_prices", []),
+                idealo_prices=external_market_context.get("idealo_prices", []),
+                geizhals_prices=external_market_context.get("geizhals_prices", []),
+                sold_history=effective_history,
+            )
+            try:
+                demand = estimate_demand(product.name, market_context=market_context)
+            except TypeError:
+                demand = estimate_demand(product.name)
+            risk_factors = estimate_risk(angebot)
+            reference_resale = market_context.get("market_price") or angebot.get("resale_price", product.min_resale_price)
+            eval_result = advanced_evaluate_deal(
+                product,
+                angebot["offer_price"],
+                reference_resale,
+                angebot["condition"],
+                angebot["accessories"],
+                angebot["location"],
+                demand,
+                risk_factors,
+            )
             pricing = build_trade_plan(
                 offer_price=angebot["offer_price"],
                 sold_prices=sold_prices_condition or sold_prices_global,
@@ -150,7 +170,8 @@ def run_search_workflow(
                 min_net_profit=min_net_profit,
                 offer_condition=angebot.get("condition", product.condition),
                 product_condition=product.condition,
-                fallback_sell_price=angebot.get("resale_price", product.min_resale_price),
+                fallback_sell_price=market_context.get("market_price") or angebot.get("resale_price", product.min_resale_price),
+                new_price_ceiling=market_context.get("new_price_ceiling"),
             )
             target_sell_price = pricing["target_sell_price"]
             net_profit = pricing["expected_net_profit"]
@@ -239,6 +260,12 @@ def run_search_workflow(
                 listing_age_days=(float(angebot.get("listing_age_days")) if angebot.get("listing_age_days") is not None else None),
                 action_color=str(intelligence["action_color"]),
                 recommended_purchase=(buy_decision == "KAUFEN"),
+                active_market_price=market_context.get("active_market_price"),
+                warehouse_market_price=market_context.get("warehouse_market_price"),
+                new_price_ceiling=market_context.get("new_price_ceiling"),
+                sold_active_ratio=market_context.get("sold_active_ratio"),
+                google_trends_score=market_context.get("google_trends_score"),
+                amazon_bsr_score=market_context.get("amazon_bsr_score"),
             )
             all_deals.append(deal)
 

@@ -81,6 +81,7 @@ def build_trade_plan(
     offer_condition: str,
     product_condition: str,
     fallback_sell_price: float,
+    new_price_ceiling: float | None = None,
 ) -> Dict[str, float]:
     offer_price = float(offer_price)
     base_sell = _robust_market_price(sold_prices, fallback_sell_price)
@@ -95,6 +96,8 @@ def build_trade_plan(
     sample_size = len([v for v in sold_prices if isinstance(v, (int, float)) and v > 0])
     confidence_haircut = 0.98 if sample_size >= 8 else 0.965 if sample_size >= 4 else 0.95
     target_sell_price = max(0, base_sell * condition_adjustment * confidence_haircut)
+    if new_price_ceiling and new_price_ceiling > 0:
+        target_sell_price = min(target_sell_price, float(new_price_ceiling) * 0.93)
 
     net_profit = (target_sell_price * (1 - fee_rate)) - offer_price - fixed_cost_per_sale
     max_buy_price = (target_sell_price * (1 - fee_rate)) - fixed_cost_per_sale - min_net_profit
