@@ -11,7 +11,7 @@ def make_product() -> Product:
         min_price=300,
         max_price=450,
         min_profit=50,
-        min_resale_price=500,
+        min_resale_price=620,
     )
 
 
@@ -250,8 +250,11 @@ def test_main_flow_skips_notifications_when_no_deal(monkeypatch):
     assert FakeScheduler.last_instance is not None
     assert FakeScheduler.last_instance.started
     assert FakeScheduler.last_instance.stopped
-    assert events["shown"] == []
-    assert events["exported"] == []
+    assert events["shown"] is not None
+    assert len(events["shown"]) == 1
+    assert events["shown"][0].buy_decision != "KAUFEN"
+    assert events["exported"] is not None
+    assert len(events["exported"]) == 1
     assert events["budget_exported"] == []
     assert len(events["emails"]) == 0
     assert len(events["telegrams"]) == 0

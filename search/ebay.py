@@ -16,6 +16,19 @@ class EbaySearch:
         self.config = ConfigManager()
 
     @staticmethod
+    def _listing_age_days(value: str) -> float | None:
+        if not value:
+            return None
+        try:
+            dt = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            return None
+        age_seconds = (datetime.utcnow() - dt).total_seconds()
+        if age_seconds < 0:
+            return 0.0
+        return round(age_seconds / 86400.0, 1)
+
+    @staticmethod
     def _to_offer(item: Dict, product: Product) -> Dict:
         selling_status = item.get("sellingStatus", [{}])[0]
         current_price = selling_status.get("currentPrice", [{}])[0]
@@ -25,6 +38,11 @@ class EbaySearch:
             item.get("condition", [{}])[0].get("conditionDisplayName", [product.condition])[0]
             if item.get("condition")
             else product.condition
+        )
+        listing_start = (
+            item.get("listingInfo", [{}])[0].get("startTime", [""])[0]
+            if item.get("listingInfo")
+            else ""
         )
 
         return {
@@ -38,6 +56,7 @@ class EbaySearch:
             "resale_price": round(target_resale, 2),
             "seller_rating": 5,
             "is_fake": False,
+            "listing_age_days": EbaySearch._listing_age_days(listing_start),
         }
 
     def _request(self, operation_name: str, product_name: str) -> Dict:

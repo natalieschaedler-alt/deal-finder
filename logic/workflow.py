@@ -14,9 +14,9 @@ def run_search_workflow(
     from logic.demand import estimate_demand
     from logic.risk import estimate_risk
     from logic.advanced_evaluate import advanced_evaluate_deal
+    from logic.deal_intelligence import compute_deal_intelligence
     from logic.product_discovery import discover_best_products
     from logic.market_pricing import build_trade_plan, normalize_condition
-    from logic.opportunity import calculate_opportunity_score
     from logic.vision_analysis import inspect_listing_images
     from logic.budget_optimizer import optimize_deal_selection
     from logic.deal_identity import build_deal_id
@@ -35,6 +35,7 @@ def run_search_workflow(
     fee_percent_config = float(config.get("marketplace_fee_percent", 10))
     fee_rate = fee_percent_config / 100 if fee_percent_config > 1 else fee_percent_config
     fixed_cost_per_sale = float(config.get("fixed_cost_per_sale", 5))
+    shipping_cost = float(config.get("shipping_cost", fixed_cost_per_sale))
     min_net_profit = float(config.get("min_net_profit", 30))
     enable_image_analysis = bool(config.get("enable_image_analysis", True))
     enable_vision_analysis = bool(config.get("enable_vision_analysis", True))
@@ -85,6 +86,7 @@ def run_search_workflow(
                         "seller_rating": 5,
                         "is_fake": False,
                         "source_platform": "DemoFallback",
+                        "listing_age_days": 3,
                     }
                 ]
             else:
@@ -157,34 +159,46 @@ def run_search_workflow(
             sold_price_median = round(float(median(sold_price_values)), 2) if sold_price_values else None
             sold_source_summary = "eBay" if effective_history else ""
             risk_penalty = sum(risk_factors.values()) if risk_factors else 0
-            capital_efficiency = round((net_profit / angebot["offer_price"]), 3) if angebot["offer_price"] > 0 else 0
-            seller_score = max(0.0, min(100.0, float(angebot.get("seller_rating", 5)) * 20.0 - risk_penalty * 25.0))
-            opportunity_score = calculate_opportunity_score(
-                offer_price=angebot["offer_price"],
-                product_max_price=product.max_price,
-                net_profit=net_profit,
-                roi_percent=roi_percent,
-                demand=demand,
-                risk_penalty=risk_penalty,
-                max_buy_price=pricing["max_buy_price"],
-                image_score=image_result.get("score"),
+            seller_rating_raw = float(angebot.get("seller_rating", 5) or 5)
+            intelligence = compute_deal_intelligence(
+                price=angebot["offer_price"],
+                market_price=target_sell_price,
                 category=product.category,
+                condition=angebot.get("condition", product.condition),
+                sold_history=effective_history,
+                listing_age_days=angebot.get("listing_age_days"),
+                seller_rating=seller_rating_raw,
+                fees=fee_rate,
+                shipping=shipping_cost,
+                image_score=image_result.get("score"),
+                has_live_market_data=has_live_market_data,
             )
+            net_profit = float(intelligence["net_profit"])
+            roi_percent = round((net_profit / angebot["offer_price"] * 100), 1) if angebot["offer_price"] > 0 else 0
+            capital_efficiency = round((net_profit / angebot["offer_price"]), 3) if angebot["offer_price"] > 0 else 0
+            seller_score = max(0.0, min(100.0, float(intelligence["seller_score"]) * 100.0 - risk_penalty * 10.0))
+            opportunity_score = float(intelligence["score"])
             buy_price_gap = round(pricing["max_buy_price"] - angebot["offer_price"], 2)
             vision_damage_flags = image_result.get("damage_flags", [])
             vision_summary = image_result.get("summary", "")
             if vision_damage_flags:
                 vision_summary = f"{vision_summary} | Hinweise: {', '.join(vision_damage_flags)}"
 
-            buy_decision = (
-                "KAUFEN"
-                if eval_result["recommendation"] == "Deal"
-                and angebot["offer_price"] <= pricing["max_buy_price"]
-                and net_profit >= min_net_profit
-                and opportunity_score >= float(config.get("min_opportunity_score", 30))
-                and (has_live_market_data or not require_real_market_data)
-                else "WARTEN"
-            )
+            buy_decision = str(intelligence["action"])
+            if require_real_market_data and not has_live_market_data and buy_decision == "KAUFEN":
+                buy_decision = "BEOBACHTEN"
+
+            min_score = float(config.get("min_opportunity_score", 30))
+            if opportunity_score < min_score and buy_decision == "KAUFEN":
+                buy_decision = "BEOBACHTEN"
+
+            if eval_result.get("recommendation") != "Deal" and buy_decision == "KAUFEN":
+                buy_decision = "BEOBACHTEN"
+
+            if net_profit <= 0:
+                buy_decision = "IGNORIEREN"
+
+            recommendation_text = "Deal" if buy_decision == "KAUFEN" else "Beobachten" if buy_decision == "BEOBACHTEN" else "Kein Deal"
             deal = Deal(
                 product=product,
                 offer_title=angebot["offer_title"],
@@ -194,8 +208,8 @@ def run_search_workflow(
                 condition=angebot["condition"],
                 accessories=angebot["accessories"],
                 resale_price=target_sell_price,
-                profit=eval_result["profit"],
-                recommendation=eval_result["recommendation"],
+                profit=net_profit,
+                recommendation=recommendation_text,
                 risk=", ".join(eval_result["reasons"]),
                 target_sell_price=target_sell_price,
                 max_buy_price=pricing["max_buy_price"],
@@ -219,13 +233,21 @@ def run_search_workflow(
                 source_platform=str(angebot.get("source_platform", "")),
                 primary_image_url=(angebot.get("image_urls", [""])[0] if angebot.get("image_urls") else ""),
                 seller_score=round(seller_score, 1),
+                condition_score=float(intelligence["condition_score"]),
+                demand_score=float(intelligence["demand_score"]),
+                risk_score=float(intelligence["risk_score"]),
+                listing_age_days=(float(angebot.get("listing_age_days")) if angebot.get("listing_age_days") is not None else None),
+                action_color=str(intelligence["action_color"]),
+                recommended_purchase=(buy_decision == "KAUFEN"),
             )
-            if deal.buy_decision == "KAUFEN":
-                all_deals.append(deal)
+            all_deals.append(deal)
 
-    filtered = [deal for deal in all_deals if (deal.net_profit or 0) >= min_net_profit]
-    sorted_deals = sort_deals(filtered, by="opportunity_score", reverse=True)
-    budget_plan = optimize_deal_selection(sorted_deals, max_purchase_budget, max_items=max_budget_items)
+    sorted_deals = sort_deals(all_deals, by="opportunity_score", reverse=True)
+    buy_candidates = [
+        deal for deal in sorted_deals
+        if deal.buy_decision == "KAUFEN" and (deal.net_profit or 0) >= min_net_profit
+    ]
+    budget_plan = optimize_deal_selection(buy_candidates, max_purchase_budget, max_items=max_budget_items)
     selected_deals = budget_plan["selected_deals"]
 
     if show_console:
@@ -233,10 +255,10 @@ def run_search_workflow(
     if export_files:
         export_deals_csv(sorted_deals)
         export_budget_plan_csv(selected_deals)
-    if enable_notifications and sorted_deals:
-        best_deal = selected_deals[0] if selected_deals else sorted_deals[0]
+    if enable_notifications and buy_candidates:
+        best_deal = selected_deals[0] if selected_deals else buy_candidates[0]
         deal_message = (
-            f"{len(sorted_deals)} neue Deals. Bester Deal: {best_deal.product.name} | "
+            f"{len(buy_candidates)} neue kaufbare Deals. Bester Deal: {best_deal.product.name} | "
             f"Einkauf {best_deal.offer_price:.2f} EUR | "
             f"Verkauf {best_deal.target_sell_price:.2f} EUR | "
             f"Netto-Gewinn {best_deal.net_profit:.2f} EUR | "
@@ -246,8 +268,8 @@ def run_search_workflow(
         )
         send_email("Neue Deals gefunden!", deal_message, config.get("notify_email", ""))
         send_telegram(deal_message, config.get("notify_telegram", ""))
-    elif not sorted_deals:
-        logger.info("Keine neuen Deals gefunden.")
+    elif not buy_candidates:
+        logger.info("Keine kaufbaren Deals gefunden.")
 
     return {
         "deals": sorted_deals,

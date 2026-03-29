@@ -529,7 +529,7 @@ def _signal_label(row: pd.Series) -> str:
     if action == "BEOBACHTEN":
         return "Beobachten"
     if action == "IGNORIEREN":
-        return "Riskant"
+        return "Finger weg"
     return "Beobachten"
 
 
@@ -556,6 +556,14 @@ def _platform_label(row: pd.Series) -> str:
 
 
 def _speed_label(row: pd.Series) -> str:
+    demand_score = float(row.get("Nachfrage_Score", row.get("demand_score", 0)) or 0)
+    if demand_score > 0:
+        if demand_score >= 0.75:
+            return "schnell"
+        if demand_score >= 0.4:
+            return "mittel"
+        return "langsam"
+
     sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
     score = float(row.get("Chance_Score", 0) or 0)
     if sold_count >= 5 or score >= 90:
@@ -566,6 +574,14 @@ def _speed_label(row: pd.Series) -> str:
 
 
 def _safety_label(row: pd.Series) -> str:
+    risk_score = float(row.get("Risiko_Score", row.get("risk_score", 0)) or 0)
+    if risk_score > 0:
+        if risk_score >= 0.8:
+            return "niedriges Risiko"
+        if risk_score >= 0.6:
+            return "mittleres Risiko"
+        return "hohes Risiko"
+
     quality = str(row.get("Datenbasis", "Fallback"))
     risk = str(row.get("Risiko", "")).lower()
     seller_score = float(row.get("Verkäufer_Score", row.get("seller_score", 0)) or 0)
@@ -589,9 +605,13 @@ def _seller_label(row: pd.Series) -> str:
 
 def _score_breakdown_html(row: pd.Series) -> str:
     price_gap = float(row.get("Kaufpuffer", row.get("buy_price_gap", 0)) or 0)
+    demand_score = float(row.get("Nachfrage_Score", row.get("demand_score", 0)) or 0)
     sold_count = float(row.get("Verkauft_Anzahl", 0) or 0)
     vision = str(row.get("Vision_Analyse", "") or "")
-    demand_text = "hohe Nachfrage" if sold_count >= 5 else "solide Nachfrage" if sold_count >= 2 else "unsichere Nachfrage"
+    if demand_score > 0:
+        demand_text = "hohe Nachfrage" if demand_score >= 0.75 else "solide Nachfrage" if demand_score >= 0.4 else "unsichere Nachfrage"
+    else:
+        demand_text = "hohe Nachfrage" if sold_count >= 5 else "solide Nachfrage" if sold_count >= 2 else "unsichere Nachfrage"
     image_text = "Bildprüfung positiv" if vision and vision.lower() not in {"-", "", "bildanalyse deaktiviert"} else "Bildprüfung neutral"
     return f"""
     <div class="score-breakdown">
@@ -853,6 +873,8 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
         "Netto-Gewinn",
         "ROI_%",
         "Chance_Score",
+        "Nachfrage_Score",
+        "Risiko_Score",
         "Verkäufer_Score",
         "Aktion",
         "Empfohlener_Kauf",
@@ -866,6 +888,8 @@ def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
     rename_map = {
         "ROI_%": "ROI %",
         "Chance_Score": "Chance",
+        "Nachfrage_Score": "Nachfrage",
+        "Risiko_Score": "Risiko",
         "Verkäufer_Score": "Verkäufer",
         "Empfohlener_Kauf": "Plan",
         "Kapital_Effizienz": "Effizienz",
@@ -1162,6 +1186,11 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
                 selected_platform = st.selectbox("Plattform", options=platform_options)
                 conditions = sorted([value for value in deals.get("Zustand", pd.Series(dtype=str)).dropna().unique().tolist()])
                 selected_condition = st.selectbox("Zustand", options=["Alle"] + conditions)
+                min_score = st.slider("Mindest-Score", min_value=0, max_value=100, value=0, step=5)
+                has_risk_metric = "Risiko_Score" in deals.columns
+                max_risk_score = st.slider("Max Risiko", min_value=0.0, max_value=1.0, value=1.0, step=0.05, disabled=not has_risk_metric)
+                if not has_risk_metric:
+                    st.caption("Risiko-Filter wird aktiv, sobald Risiko-Score Daten vorliegen.")
                 has_distance = "Entfernung_km" in deals.columns
                 max_distance = st.slider("Entfernung (km)", min_value=0, max_value=500, value=250, step=10, disabled=not has_distance)
                 if not has_distance:
@@ -1174,10 +1203,14 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             filtered["Netto-Gewinn"] = _safe_float_series(filtered, "Netto-Gewinn")
             filtered["Einkauf"] = _safe_float_series(filtered, "Einkauf")
             filtered["Chance_Score"] = _safe_float_series(filtered, "Chance_Score")
+            filtered["Risiko_Score"] = _safe_float_series(filtered, "Risiko_Score")
             filtered["Plattform"] = filtered.get("Link", pd.Series(dtype=str)).apply(_platform_from_link)
             filtered["Zustand"] = filtered.get("Zustand", pd.Series(dtype=str)).fillna("-")
             filtered = filtered[filtered["Netto-Gewinn"] >= min_netto]
             filtered = filtered[filtered["Einkauf"] <= max_price]
+            filtered = filtered[filtered["Chance_Score"] >= float(min_score)]
+            if has_risk_metric:
+                filtered = filtered[filtered["Risiko_Score"] <= float(max_risk_score)]
             if only_buy and "Aktion" in filtered.columns:
                 filtered = filtered[filtered["Aktion"] == "KAUFEN"]
             if only_recommended and "Empfohlener_Kauf" in filtered.columns:

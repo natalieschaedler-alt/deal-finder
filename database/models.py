@@ -51,3 +51,8 @@ class Deal:
     source_platform: str = ""
     primary_image_url: str = ""
     seller_score: Optional[float] = None
+    condition_score: Optional[float] = None
+    demand_score: Optional[float] = None
+    risk_score: Optional[float] = None
+    listing_age_days: Optional[float] = None
+    action_color: str = "gelb"
