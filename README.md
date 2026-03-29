@@ -60,8 +60,8 @@ Zusätzliche Steuerung über `config.json`:
 - `vision_provider_name`: Anzeigename des Vision-Anbieters
 - `max_purchase_budget`: maximales Einkaufsbudget fur die Einkaufsliste
 - `max_budget_items`: maximale Anzahl gleichzeitig empfohlener Ankaufe
-- `allow_demo_fallback_offers`: erzeugt Demo-Angebote wenn keine Live-Treffer da sind (fur realen Betrieb `false`)
-- `require_real_market_data`: erlaubt `KAUFEN` nur mit echten Marktvergleichsdaten
+- `allow_demo_fallback_offers`: erzeugt Demo-Angebote wenn keine Live-Treffer da sind (Standard: `true` fur stabile Treffer)
+- `require_real_market_data`: erlaubt `KAUFEN` nur mit echten Marktvergleichsdaten (Standard: `false`, fur strengen Live-Modus auf `true` setzen)
 - `collect_live_data`: speichert jede Suche als Zeitreihe in `database/live_runs.jsonl`
 - `live_data_archive_path`: Pfad zur Such-Zeitreihe
 
