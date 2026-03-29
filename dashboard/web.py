@@ -31,6 +31,9 @@ APP_CSS = """
         padding-top: 2rem;
         padding-bottom: 3rem;
     }
+    .stApp, .block-container {
+        color: var(--text-main);
+    }
     p, li, label, .stMarkdown, .stText, .stCaption {
         font-size: 1.02rem;
         line-height: 1.55;
@@ -108,6 +111,44 @@ APP_CSS = """
     .stButton > button {
         font-size: 1rem;
         font-weight: 600;
+        min-height: 2.65rem;
+    }
+    .stTextInput label,
+    .stTextArea label,
+    .stSelectbox label,
+    .stNumberInput label,
+    .stCheckbox label {
+        font-size: 0.98rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+    .stTextInput input,
+    .stTextArea textarea,
+    .stSelectbox div[data-baseweb="select"] > div,
+    .stNumberInput input {
+        background: #ffffff;
+        color: var(--text-main);
+        border: 1px solid var(--border-soft);
+        font-size: 1rem;
+    }
+    a {
+        color: #0f5a9a !important;
+        font-weight: 600;
+    }
+    @media (max-width: 900px) {
+        .block-container {
+            padding-top: 1.15rem;
+            padding-bottom: 1.8rem;
+        }
+        h1 { font-size: 1.55rem; }
+        h2 { font-size: 1.25rem; }
+        h3 { font-size: 1.08rem; }
+        p, li, label, .stMarkdown, .stText, .stCaption {
+            font-size: 0.98rem;
+        }
+        .metric-value {
+            font-size: 1.55rem;
+        }
     }
 </style>
 """
@@ -153,6 +194,50 @@ def _safe_float_series(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(dtype=float)
     return pd.to_numeric(frame[column], errors="coerce").fillna(0.0)
+
+
+def _build_deals_readable_table(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    table = frame.copy()
+    numeric_cols = [
+        "Einkauf",
+        "Ziel-Verkauf",
+        "Netto-Gewinn",
+        "ROI_%",
+        "Chance_Score",
+        "Kapital_Effizienz",
+        "Verkauft_Anzahl",
+        "Verkauft_Median",
+    ]
+    for col in numeric_cols:
+        if col in table.columns:
+            table[col] = pd.to_numeric(table[col], errors="coerce").round(2)
+
+    visible_cols = [
+        "Produkt",
+        "Einkauf",
+        "Ziel-Verkauf",
+        "Netto-Gewinn",
+        "ROI_%",
+        "Chance_Score",
+        "Aktion",
+        "Empfohlener_Kauf",
+        "Kapital_Effizienz",
+        "Vision_Analyse",
+        "Link",
+    ]
+    existing_cols = [col for col in visible_cols if col in table.columns]
+    table = table[existing_cols]
+
+    rename_map = {
+        "ROI_%": "ROI %",
+        "Chance_Score": "Chance",
+        "Empfohlener_Kauf": "Plan",
+        "Kapital_Effizienz": "Effizienz",
+        "Vision_Analyse": "Vision",
+    }
+    return table.rename(columns=rename_map)
 
 
 def _parse_history(history_value: str) -> pd.DataFrame:
@@ -291,6 +376,7 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
         if deals.empty:
             st.info("Noch keine Deals vorhanden.")
         else:
+            st.markdown("### Deals im Klartext")
             filter_cols = st.columns(4)
             min_netto = filter_cols[0].number_input("Mindest Netto-Gewinn", value=0.0, step=10.0)
             max_price = filter_cols[1].number_input("Maximaler Einkauf", value=float(_safe_float_series(deals, 'Einkauf').max() or 0.0), step=25.0)
@@ -313,7 +399,8 @@ def start_web_dashboard(csv_path: str = "deals_export.csv", actions_path: str = 
             if selected_product != "Alle":
                 filtered = filtered[filtered["Produkt"] == selected_product]
 
-            st.dataframe(filtered, use_container_width=True, hide_index=True)
+            readable = _build_deals_readable_table(filtered)
+            st.dataframe(readable, use_container_width=True, hide_index=True)
             if filtered.empty:
                 st.info("Mit diesen Filtern gibt es keine Deals.")
             else:
