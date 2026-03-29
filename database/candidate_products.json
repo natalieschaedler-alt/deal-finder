@@ -1,0 +1,12 @@
+[
+  {"name": "iPhone 13", "category": "Smartphone"},
+  {"name": "iPhone 14", "category": "Smartphone"},
+  {"name": "Samsung Galaxy S23", "category": "Smartphone"},
+  {"name": "MacBook Air M1", "category": "Laptop"},
+  {"name": "MacBook Pro 14", "category": "Laptop"},
+  {"name": "PlayStation 5", "category": "Konsole"},
+  {"name": "Nintendo Switch OLED", "category": "Konsole"},
+  {"name": "DJI Mini 3", "category": "Drohne"},
+  {"name": "Canon EOS R", "category": "Kamera"},
+  {"name": "Sony WH-1000XM5", "category": "Audio"}
+]

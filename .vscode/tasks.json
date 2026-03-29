@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Deal Finder App",
+			"type": "shell",
+			"command": "streamlit",
+			"args": [
+				"run",
+				"dashboard/web.py",
+				"--server.headless",
+				"true",
+				"--server.port",
+				"8502"
+			],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}

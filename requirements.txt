@@ -1,0 +1,10 @@
+# requirements.txt
+# Trage hier die benötigten Pakete für das Projekt ein
+requests
+beautifulsoup4
+rich
+pytest
+pytest-cov
+streamlit
+pandas
+Pillow
